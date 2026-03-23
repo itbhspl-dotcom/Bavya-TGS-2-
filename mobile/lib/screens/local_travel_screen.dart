@@ -20,8 +20,7 @@ class _LocalTravelScreenState extends State<LocalTravelScreen> {
   final TripService _tripService = TripService();
   final ApiService _apiService = ApiService();
 
-  final TextEditingController _purposeController =
-      TextEditingController(text: 'MMU INSPECTION TRAVEL SCHEDULE');
+  final TextEditingController _purposeController = TextEditingController();
   final TextEditingController _projectController = TextEditingController(text: 'General');
   String _baseLocation = 'Vijayawada';
   
@@ -36,7 +35,20 @@ class _LocalTravelScreenState extends State<LocalTravelScreen> {
   @override
   void initState() {
     super.initState();
+    _updatePurpose();
     _detectManager();
+  }
+
+  void _updatePurpose() {
+    final parts = _selectedMonth.split('-');
+    if (parts.length == 2) {
+      final year = int.parse(parts[0]);
+      final month = int.parse(parts[1]);
+      final date = DateTime(year, month, 1);
+      final monthStr = DateFormat('MMM').format(date).toUpperCase();
+      final yearStr = DateFormat('yy').format(date);
+      _purposeController.text = 'MMU ITS $monthStr$yearStr';
+    }
   }
 
   String _normalizeId(dynamic id) {
@@ -377,7 +389,10 @@ class _LocalTravelScreenState extends State<LocalTravelScreen> {
                     style: GoogleFonts.plusJakartaSans(
                         fontWeight: FontWeight.w700)));
           }),
-          onChanged: (v) => setState(() => _selectedMonth = v!),
+          onChanged: (v) => setState(() {
+            _selectedMonth = v!;
+            _updatePurpose();
+          }),
         ),
       ),
     );

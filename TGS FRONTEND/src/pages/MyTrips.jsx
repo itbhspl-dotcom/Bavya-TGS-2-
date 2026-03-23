@@ -301,7 +301,7 @@ const MyTrips = () => {
                     </div>
                 ) : (
                     filteredTrips.map(trip => (
-                        <div key={trip.id} className={`trip-card premium-card ${trip.status?.toLowerCase() === 'settled' ? 'completed-blocked' : ''}`}>
+                        <div key={trip.id} className={`trip-card premium-card ${trip.status?.toLowerCase() === 'settled' ? 'completed-blocked' : ''} ${trip.considerAsLocal ? 'travel-card' : ''}`}>
                             {trip.status?.toLowerCase() === 'settled' && (
                                 <div className="settled-overlay">
                                     <div className="settled-badge">
@@ -319,7 +319,7 @@ const MyTrips = () => {
 
                             <div className="card-body">
                                 <div className="trip-icon">
-                                    <Plane size={24} />
+                                    {trip.considerAsLocal ? <Briefcase size={24} /> : <Plane size={24} />}
                                 </div>
                                 <div className="trip-main">
                                     <h3>{trip.purpose}</h3>
@@ -490,6 +490,13 @@ const MyTrips = () => {
                 )
             }
             <style>{`
+                .travel-card {
+                    border-top: 3px solid #06b6d4 !important;
+                }
+                .travel-card .trip-icon {
+                    background: #ecfeff !important;
+                    color: #0891b2 !important;
+                }
                 .trip-card.completed-blocked {
                     position: relative;
                     opacity: 0.85;
