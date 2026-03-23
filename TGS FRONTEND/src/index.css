@@ -7150,8 +7150,23 @@ textarea:focus {
 .timeline-node {
   display: flex;
   gap: 2.5rem;
-  padding-bottom: 4rem;
+  padding: 2.5rem;
+  margin-bottom: 1.75rem;
   position: relative;
+  border-radius: 24px;
+  background: #fff;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  box-shadow: 0 15px 35px rgba(15, 23, 42, 0.06);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.timeline-node:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
+}
+
+.timeline-node:last-child {
+  margin-bottom: 0;
 }
 
 .node-line-container {
@@ -7186,6 +7201,69 @@ textarea:focus {
   border-radius: 10px;
 }
 
+.timeline-track-horizontal {
+  background: white;
+  padding: 3rem;
+  border-radius: 40px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.05);
+  display: flex;
+  gap: 2.5rem;
+  overflow-x: auto;
+  padding-bottom: 3.5rem;
+}
+
+.timeline-node-horizontal {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  position: relative;
+  flex: 1;
+  min-width: 240px;
+  padding-bottom: 3rem;
+}
+
+.timeline-node-horizontal:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  right: -1.4rem;
+  width: 2.8rem;
+  height: 4px;
+  background: #f1f5f9;
+  border-radius: 2px;
+  z-index: 1;
+}
+
+.timeline-node-horizontal.completed:not(:last-child)::after,
+.timeline-node-horizontal.current:not(:last-child)::after {
+  background: #34d399;
+}
+
+.node-line-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.node-icon-wrap {
+  width: 64px;
+  height: 64px;
+  border-radius: 20px;
+  background: #f8fafc;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #cbd5e1;
+  z-index: 2;
+  border: 4px solid white;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.node-connector {
+  display: none;
+}
+
 .node-body {
   flex: 1;
   padding-top: 0.5rem;
@@ -7199,9 +7277,10 @@ textarea:focus {
 }
 
 .node-header h4 {
-  font-size: 1.5rem;
+  font-size: 1.35rem;
   font-weight: 900;
   color: var(--secondary);
+  line-height: 1.2;
 }
 
 .node-tags {
@@ -7228,24 +7307,28 @@ textarea:focus {
 }
 
 .node-description {
-  font-size: 1.1rem;
+  font-size: 1.05rem;
   color: #475569;
-  line-height: 1.6;
-  max-width: 800px;
+  line-height: 1.7;
+  max-width: 100%;
   font-weight: 500;
+  margin-top: 0.75rem;
 }
 
 /* Node States */
-.timeline-node.completed .node-icon-wrap {
+.timeline-node.completed .node-icon-wrap,
+.timeline-node-horizontal.completed .node-icon-wrap {
   background: #d1fae5;
   color: #059669;
 }
 
-.timeline-node.completed h4 {
+.timeline-node.completed h4,
+.timeline-node-horizontal.completed h4 {
   color: #059669;
 }
 
-.timeline-node.completed .node-connector {
+.timeline-node.completed .node-connector,
+.timeline-node-horizontal.completed .node-connector {
   background: #34d399;
 }
 
@@ -7254,7 +7337,8 @@ textarea:focus {
   color: #059669;
 }
 
-.timeline-node.current .node-icon-wrap {
+.timeline-node.current .node-icon-wrap,
+.timeline-node-horizontal.current .node-icon-wrap {
   background: var(--burgundy);
   color: white;
   transform: scale(1.15);
@@ -7262,7 +7346,8 @@ textarea:focus {
   animation: pulse-ring 2s infinite;
 }
 
-.timeline-node.current h4 {
+.timeline-node.current h4,
+.timeline-node-horizontal.current h4 {
   color: var(--burgundy);
   font-size: 1.75rem;
 }

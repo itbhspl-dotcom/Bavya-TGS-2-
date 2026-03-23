@@ -158,8 +158,8 @@ def update_trip_lifecycle(trip, title, description):
     if not isinstance(events, list):
         events = []
     
-    # Avoid duplicate events with same title
-    if not any(e.get('title') == title for e in events):
+    # Avoid duplicate events with same title and description
+    if not any(e.get('title') == title and e.get('description') == description for e in events):
         events.append(event)
         trip.lifecycle_events = events
         trip.save(update_fields=['lifecycle_events'])
@@ -893,10 +893,13 @@ class ApprovalsView(APIView):
                     obj.current_approver = hr_head
                     obj.save()
                     
+                    if trip:
+                        update_trip_lifecycle(trip, f"Approved by {user.name}", f"Approved by {user.name} and forwarded to HR ({hr_head.name if hr_head else 'Head'}).")
+                    
                     Notification.objects.create(
                         user=requester,
-                        title=f"Management Approved",
-                        message=f"Your {request_type} has been approved by management and sent to HR for verification.",
+                        title=f"Approved by {user.name}",
+                        message=f"Your {request_type} has been approved by {user.name} and sent to HR for verification.",
                         type='success'
                     )
 
@@ -915,7 +918,7 @@ class ApprovalsView(APIView):
                         Notification.objects.create(
                             user=hr_head,
                             title=f"HR Verification Required",
-                            message=f"{requester.name}'s {request_type} is management-approved and awaits your verification.",
+                            message=f"{requester.name}'s {request_type} has been approved by {user.name} and awaits your verification.",
                             type='info'
                         )
                 return Response({"message": "Sent to HR for verification"})
@@ -2169,6 +2172,12 @@ class BulkActivityBatchViewSet(viewsets.ModelViewSet):
                 batch.hierarchy_level += 1
                 batch.save()
                 
+                if batch.trip:
+                    batch.trip.current_approver = next_approver
+                    batch.trip.hierarchy_level = batch.hierarchy_level
+                    batch.trip.save()
+                    update_trip_lifecycle(batch.trip, f"Level {batch.hierarchy_level - 1} Approval", f"Bulk travel log approved by {user.name} and forwarded to {next_approver.name}.")
+                
                 Notification.objects.create(
                     user=next_approver,
                     title="Pending Approval: Bulk Travel Log",
@@ -2189,10 +2198,16 @@ class BulkActivityBatchViewSet(viewsets.ModelViewSet):
                 batch.current_approver = hr_head
                 batch.save()
                 
+                if batch.trip:
+                    batch.trip.status = 'Manager Approved'
+                    batch.trip.current_approver = hr_head
+                    batch.trip.save()
+                    update_trip_lifecycle(batch.trip, f"Approved by {user.name}", f"Approved by {user.name} and forwarded to HR ({hr_head.name if hr_head else 'Head'}).")
+                
                 Notification.objects.create(
                     user=requester,
-                    title="Management Approved",
-                    message="Your bulk travel log has been approved by management and sent to HR for verification.",
+                    title=f"Approved by {user.name}",
+                    message=f"Your bulk travel log has been approved by {user.name} and sent to HR for verification.",
                     type='success'
                 )
                 
@@ -2200,7 +2215,7 @@ class BulkActivityBatchViewSet(viewsets.ModelViewSet):
                     Notification.objects.create(
                         user=hr_head,
                         title="HR Verification Required",
-                        message=f"{requester.name}'s bulk travel log is management-approved and awaits your verification.",
+                        message=f"{requester.name}'s bulk travel log has been approved by {user.name} and awaits your verification.",
                         type='info'
                     )
                 return Response({"message": "Sent to HR for verification"})

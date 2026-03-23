@@ -40,6 +40,7 @@ import AdminMasterManagement from './pages/AdminMasterManagement';
 import FuelMaster from './pages/FuelMaster';
 import JobReport from './pages/JobReport';
 import TravelCreation from './pages/TravelCreation';
+import TravelTimeline from './pages/TravelTimeline';
 
 import AdminMasters from './pages/AdminMasters';
 const ProtectedRoute = ({ children }) => {
@@ -54,6 +55,7 @@ const ProtectedRoute = ({ children }) => {
 
 
 function App() {
+  console.log("App Component Rendering Layout Tree...");
   return (
     <ToastProvider>
       <AuthProvider>
@@ -96,6 +98,7 @@ function App() {
             <Route path="/job-report" element={<ProtectedRoute><JobReport /></ProtectedRoute>} />
             <Route path="/fuel-master" element={<ProtectedRoute><FuelMaster /></ProtectedRoute>} />
             <Route path="/travel-creation" element={<ProtectedRoute><TravelCreation /></ProtectedRoute>} />
+            <Route path="/travel-timeline/:id" element={<ProtectedRoute><TravelTimeline /></ProtectedRoute>} />
             <Route path="/AdminMasters" element={<ProtectedRoute><AdminMasters /></ProtectedRoute>} />
           </Routes>
         </Router>

@@ -253,10 +253,6 @@ const TripTimeline = () => {
                         </div>
                     )}
 
-                    <div className="timeline-help-card">
-                        <h4>Need Help?</h4>
-                        <p>If you're stuck at any stage, please contact your travel desk or reporting manager.</p>
-                    </div>
                 </aside>
 
                 <main className="timeline-content-main">
@@ -267,7 +263,6 @@ const TripTimeline = () => {
                                     <div className="node-icon-wrap">
                                         {step.icon}
                                     </div>
-                                    {index !== lifecycleSteps.length - 1 && <div className="node-connector"></div>}
                                 </div>
                                 <div className="node-body">
                                     <div className="node-header">

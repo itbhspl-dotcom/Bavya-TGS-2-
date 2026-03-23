@@ -1106,9 +1106,13 @@ const ApprovalInbox = ({ enforceTab = null }) => {
                                                                             const itemEdit = (batchItemEdits[batch.id] || {})[originalIdx] || {};
                                                                             return (
                                                                             <tr key={filterIdx} className={itemEdit.status === 'Rejected' ? 'bg-red-50 border-b' : 'hover:bg-slate-50 border-b'}>
-                                                                                {Object.entries(row).filter(([k]) => !k.startsWith('_')).map(([k, val], vIdx) => (
-                                                                                    <td key={vIdx} className="p-2 border">{String(val || '-')}</td>
-                                                                                ))}
+                                                                                {Object.entries(row).filter(([k]) => !k.startsWith('_')).map(([k, val], vIdx) => {
+                                                                                    let displayVal = val;
+                                                                                    if (k === 'vehicle' && String(val).toLowerCase() === 'own bike') {
+                                                                                        displayVal = 'Own Vehicle';
+                                                                                    }
+                                                                                    return <td key={vIdx} className="p-2 border">{String(displayVal || '-')}</td>;
+                                                                                })}
                                                                                 <td className="p-2 border">
                                                                                     {row._status === 'Rejected' ? (
                                                                                         <span style={{ color: 'red', fontWeight: 600 }}>Rejected Before</span>
