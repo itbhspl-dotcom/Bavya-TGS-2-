@@ -1,0 +1,135 @@
+import os
+from pathlib import Path
+from dotenv import load_dotenv
+
+BASE_DIR = Path(__file__).resolve().parent.parent
+
+# Load .env file
+load_dotenv(BASE_DIR / ".env")
+
+SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "django-insecure-2+wg90pxjk^*ntkh**68*1)h4-9t0_%lg8@&)1ihhdk6c3ev0x")
+DEBUG = os.environ.get("DJANGO_DEBUG", "True") == "True"
+
+# In production, specify your domain or IP
+ALLOWED_HOSTS = ["*"] 
+
+INSTALLED_APPS = [
+    "django.contrib.contenttypes",
+    "django.contrib.auth",
+    "django.contrib.messages",
+    "django.contrib.sessions",
+    
+    "rest_framework",
+    "corsheaders",
+
+    "core",
+    "api_management",
+    "travel",
+    "guest_house",
+    "travel_masters",
+    "fleet",
+    "chatbot",
+    "notifications",
+]
+
+MIDDLEWARE = [
+    "django.middleware.security.SecurityMiddleware",
+    "django.contrib.sessions.middleware.SessionMiddleware",
+    "corsheaders.middleware.CorsMiddleware",
+    "django.middleware.common.CommonMiddleware",
+    "django.middleware.csrf.CsrfViewMiddleware",
+    "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "django.contrib.messages.middleware.MessageMiddleware",
+    "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "api_management.middleware.APILoggingMiddleware",
+    "core.middleware.CustomAuthMiddleware",
+    "core.middleware.ThreadLocalMiddleware",
+    "travel.middleware.PageAccessMiddleware",
+]
+
+ROOT_URLCONF = "tgs_backend.urls"
+
+TEMPLATES = [
+    {
+        "BACKEND": "django.template.backends.django.DjangoTemplates",
+        "DIRS": [],
+        "APP_DIRS": True,
+        "OPTIONS": {
+            "context_processors": [
+                "django.template.context_processors.debug",
+                "django.template.context_processors.request",
+                "django.contrib.auth.context_processors.auth",
+                "django.contrib.messages.context_processors.messages",
+            ],
+        },
+    },
+]
+
+WSGI_APPLICATION = "tgs_backend.wsgi.application"
+
+DATABASES = {
+    "default": {
+        "ENGINE": "django.db.backends.mysql",
+        "NAME": os.environ.get("DB_NAME", "tgs_v2"),
+        "USER": os.environ.get("DB_USER", "root"),
+        "PASSWORD": os.environ.get("DB_PASSWORD", "root"),
+        "HOST": os.environ.get("DB_HOST", "localhost"),
+        "PORT": os.environ.get("DB_PORT", "3306"),
+    }
+}
+
+# Static files (CSS, JavaScript, Images)
+STATIC_URL = "static/"
+
+# CORS Configuration
+CORS_ALLOW_ALL_ORIGINS = True # Set to False in strict production
+# CORS_ALLOWED_ORIGINS = [
+#     "http://localhost:5173",
+#     "https://your-domain.com",
+# ]
+
+# CSRF Trusted Origins (Crucial for Nginx Proxying)
+CSRF_TRUSTED_ORIGINS = [
+    "http://localhost:5173",
+    "http://localhost:6786",
+    "http://127.0.0.1:8000",
+    "http://192.168.1.147", 
+    "http://192.168.1.147:6785",
+    "http://192.168.1.147:6786",
+    "http://192.168.1.147:6787",
+    "http://10.2.1.122:6786/ ",
+]
+
+# Disable SSL/HTTPS enforcement for HTTP-only deployment
+SECURE_SSL_REDIRECT = False
+SESSION_COOKIE_SECURE = False
+CSRF_COOKIE_SECURE = False
+SECURE_BROWSER_XSS_FILTER = True
+SECURE_CONTENT_TYPE_NOSNIFF = True
+
+DATA_UPLOAD_MAX_MEMORY_SIZE = 10485760
+FILE_UPLOAD_MAX_MEMORY_SIZE = 10485760
+
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework.authentication.SessionAuthentication',
+    ],
+    'DEFAULT_PERMISSION_CLASSES': [
+        'core.permissions.IsCustomAuthenticated',
+    ],
+    'UNAUTHENTICATED_USER': None,
+}
+
+AUTH_USER_MODEL = 'core.User'
+
+LANGUAGE_CODE = "en-us"
+TIME_ZONE = "Asia/Kolkata" # Set local timezone
+USE_I18N = True
+USE_TZ = True
+
+DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+# WebPush Configuration
+VAPID_PUBLIC_KEY = os.environ.get("VAPID_PUBLIC_KEY")
+VAPID_PRIVATE_KEY = os.environ.get("VAPID_PRIVATE_KEY")
+VAPID_CLAIM_EMAIL = os.environ.get("VAPID_CLAIM_EMAIL")
