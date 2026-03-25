@@ -227,7 +227,6 @@ class TripListCreateView(generics.ListCreateAPIView):
             if user_role in ['admin', 'guesthousemanager', 'finance', 'cfo']:
                 return Trip.objects.all().order_by('-created_at')
             
-            from django.db.models import Q # type: ignore
             return Trip.objects.filter(
                 Q(user=user) | 
                 Q(current_approver=user)
@@ -466,11 +465,10 @@ class TripTrackingView(APIView):
             tracking = serializer.save()
             print("DEBUG: Tracking point saved successfully")
             
-            # --- UPDATE TripGeofenceLocationSet ---
             try:
                 from django.db import connection
                 if 'travel_tripgeofencelocationset' in connection.introspection.table_names():
-                    from travel.models import TripGeofenceLocationSet
+                    from .models import TripGeofenceLocationSet
                     geofence_set, created = TripGeofenceLocationSet.objects.get_or_create(trip=trip)
                     loc_data = geofence_set.location_data
                     if not isinstance(loc_data, list):
@@ -2146,9 +2144,8 @@ class BulkActivityBatchViewSet(viewsets.ModelViewSet):
         ws.add_data_validation(dv_date)
         dv_date.sqref = "A3:A103"   # Column A
 
-        # ── Validation 2: Time format HH:MM and 5-min increments ──────────────
-        # Use INT(A3) to compare just the date part of the cell value.
-        time_formula = "=AND(MOD(ROUND(B3*1440,0),5)=0, OR(INT(A3)>TODAY(), B3>MOD(NOW(),1)))"
+        # -- Updated formula: 5-min increments AND (if Date=Today, Time>Now; else Date>Today) --
+        time_formula = '=AND(MOD(ROUND(B3*1440,0),5)=0, IF(A3=TODAY(), B3>MOD(NOW(),1), A3>TODAY()))'
         
         dv_time = DataValidation(
             type="custom",

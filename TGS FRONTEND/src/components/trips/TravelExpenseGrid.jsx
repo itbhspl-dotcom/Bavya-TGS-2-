@@ -204,73 +204,66 @@ const TravelExpenseGrid = ({
 
     useEffect(() => {
         const fetchMasters = async () => {
-            try {
-                const [
-                    modesRes, bookedByRes, fClassesRes, tClassesRes, busTypesRes,
-                    cabVehiclesRes, airlinesRes, busOpsRes, travProvRes,
-                    locModesRes, carSubRes, bikeSubRes, locProvRes,
-                    stayTypeRes, roomTypeRes,
-                    mealCatRes, mealTypeRes,
-                    incTypeRes,
-                    trainProvRes, busProvRes, cabProvRes
-                ] = await Promise.all([
-                    api.get('/api/travel-mode-masters/'),
-                    api.get('/api/booking-type-masters/'),
-                    api.get('/api/flight-class-masters/'),
-                    api.get('/api/train-class-masters/'),
-                    api.get('/api/bus-type-masters/'),
-                    api.get('/api/intercity-cab-vehicle-masters/'),
-                    api.get('/api/airline-masters/'),
-                    api.get('/api/bus-operator-masters/'),
-                    api.get('/api/travel-provider-masters/'),
-                    api.get('/api/local-travel-mode-masters/'),
-                    api.get('/api/local-car-subtype-masters/'),
-                    api.get('/api/local-bike-subtype-masters/'),
-                    api.get('/api/local-provider-masters/'),
-                    api.get('/api/stay-type-masters/'),
-                    api.get('/api/room-type-masters/'),
-                    api.get('/api/meal-category-masters/'),
-                    api.get('/api/meal-type-masters/'),
-                    api.get('/api/incidental-type-masters/'),
-                    api.get('/api/train-provider-masters/'),
-                    api.get('/api/bus-provider-masters/'),
-                    api.get('/api/intercity-cab-provider-masters/')
-                ]);
+            // Determine which categories of masters we actually need
+            const needsTravel = !allowedNatures || allowedNatures.some(n => ['Travel'].includes(n));
+            const needsLocal = !allowedNatures || allowedNatures.some(n => ['Local Travel'].includes(n));
+            const needsFood = !allowedNatures || allowedNatures.some(n => ['Food'].includes(n));
+            const needsStay = !allowedNatures || allowedNatures.some(n => ['Accommodation'].includes(n));
+            const needsIncidental = !allowedNatures || allowedNatures.some(n => ['Incidental'].includes(n));
 
-                // Populate Travel
-                if (modesRes.data.length > 0) setTravelModes(modesRes.data.filter(m => m.status).map(m => m.mode_name));
-                if (bookedByRes.data.length > 0) setBookedByOptions(bookedByRes.data.filter(m => m.status).map(m => m.booking_type));
-                if (fClassesRes.data.length > 0) setFlightClasses(fClassesRes.data.filter(m => m.status).map(m => m.class_name));
-                if (tClassesRes.data.length > 0) setTrainClasses(tClassesRes.data.filter(m => m.status).map(m => m.class_name));
-                if (busTypesRes.data.length > 0) setBusSeatTypes(busTypesRes.data.filter(m => m.status).map(m => m.bus_type));
-                if (cabVehiclesRes.data.length > 0) setIntercityCabVehicleTypes(cabVehiclesRes.data.filter(m => m.status).map(m => m.vehicle_type));
-                if (airlinesRes.data.length > 0) setAirlines(airlinesRes.data.filter(m => m.status).map(m => m.airline_name));
-                if (busOpsRes.data.length > 0) setBusOperators(busOpsRes.data.filter(m => m.status).map(m => m.operator_name));
-                if (travProvRes.data.length > 0) setTravelProviders(travProvRes.data.filter(m => m.status).map(m => m.provider_name));
-                if (trainProvRes.data.length > 0) setTrainProviders(trainProvRes.data.filter(m => m.status).map(m => m.provider_name));
-                if (busProvRes.data.length > 0) setBusProviders(busProvRes.data.filter(m => m.status).map(m => m.provider_name));
-                if (cabProvRes.data.length > 0) setCabProviders(cabProvRes.data.map(m => m.provider_name));
+            // Helper to fetch and set state if successful
+            const safeFetch = async (url, setter, mapper) => {
+                try {
+                    const res = await api.get(url);
+                    if (res.data && res.data.length > 0) {
+                        const data = mapper ? res.data.map(mapper) : res.data;
+                        setter(data);
+                    }
+                } catch (e) {
+                    // Fail silently to avoid cluttering console for non-critical masters
+                    console.warn(`Optional master fetch failed: ${url}`);
+                }
+            };
 
-                // Populate Local
-                if (locModesRes.data.length > 0) setLocalTravelModes(locModesRes.data.filter(m => m.status).map(m => m.mode_name));
-                if (carSubRes.data.length > 0) setLocalCarSubTypes(carSubRes.data.filter(m => m.status).map(m => m.sub_type));
-                if (bikeSubRes.data.length > 0) setLocalBikeSubTypes(bikeSubRes.data.filter(m => m.status).map(m => m.sub_type));
-                if (locProvRes.data.length > 0) setLocalProviders(locProvRes.data.filter(m => m.status).map(m => m.provider_name));
+            const tasks = [];
 
-                // Populate Stay
-                if (stayTypeRes.data.length > 0) setStayTypes(stayTypeRes.data.filter(m => m.status).map(m => m.stay_type));
-                if (roomTypeRes.data.length > 0) setRoomTypes(roomTypeRes.data.filter(m => m.status).map(m => m.room_type));
-
-                // Populate Food
-                if (mealCatRes.data.length > 0) setMealCategories(mealCatRes.data.filter(m => m.status).map(m => m.category_name));
-                if (mealTypeRes.data.length > 0) setMealTypes(mealTypeRes.data.filter(m => m.status).map(m => m.meal_type));
-
-                // Populate Incidental
-                if (incTypeRes.data.length > 0) setIncidentalTypes(incTypeRes.data.filter(m => m.status).map(m => m.expense_type));
-
-            } catch (error) {
-                console.error("Failed to fetch masters:", error);
+            if (needsTravel) {
+                tasks.push(safeFetch('/api/travel-mode-masters/', setTravelModes, m => m.status ? m.mode_name : null));
+                tasks.push(safeFetch('/api/booking-type-masters/', setBookedByOptions, m => m.status ? m.booking_type : null));
+                tasks.push(safeFetch('/api/flight-class-masters/', setFlightClasses, m => m.status ? m.class_name : null));
+                tasks.push(safeFetch('/api/train-class-masters/', setTrainClasses, m => m.status ? m.class_name : null));
+                tasks.push(safeFetch('/api/bus-type-masters/', setBusSeatTypes, m => m.status ? m.bus_type : null));
+                tasks.push(safeFetch('/api/intercity-cab-vehicle-masters/', setIntercityCabVehicleTypes, m => m.status ? m.vehicle_type : null));
+                tasks.push(safeFetch('/api/airline-masters/', setAirlines, m => m.status ? m.airline_name : null));
+                tasks.push(safeFetch('/api/bus-operator-masters/', setBusOperators, m => m.status ? m.operator_name : null));
+                tasks.push(safeFetch('/api/travel-provider-masters/', setTravelProviders, m => m.status ? m.provider_name : null));
+                tasks.push(safeFetch('/api/train-provider-masters/', setTrainProviders, m => m.status ? m.provider_name : null));
+                tasks.push(safeFetch('/api/bus-provider-masters/', setBusProviders, m => m.status ? m.provider_name : null));
+                tasks.push(safeFetch('/api/intercity-cab-provider-masters/', setCabProviders, m => m.provider_name));
             }
+
+            if (needsLocal) {
+                tasks.push(safeFetch('/api/local-travel-mode-masters/', setLocalTravelModes, m => m.status ? m.mode_name : null));
+                tasks.push(safeFetch('/api/local-car-subtype-masters/', setLocalCarSubTypes, m => m.status ? m.sub_type : null));
+                tasks.push(safeFetch('/api/local-bike-subtype-masters/', setLocalBikeSubTypes, m => m.status ? m.sub_type : null));
+                tasks.push(safeFetch('/api/local-provider-masters/', setLocalProviders, m => m.status ? m.provider_name : null));
+            }
+
+            if (needsStay) {
+                tasks.push(safeFetch('/api/stay-type-masters/', setStayTypes, m => m.status ? m.stay_type : null));
+                tasks.push(safeFetch('/api/room-type-masters/', setRoomTypes, m => m.status ? m.room_type : null));
+            }
+
+            if (needsFood) {
+                tasks.push(safeFetch('/api/meal-category-masters/', setMealCategories, m => m.status ? m.category_name : null));
+                tasks.push(safeFetch('/api/meal-type-masters/', setMealTypes, m => m.status ? m.meal_type : null));
+            }
+
+            if (needsIncidental) {
+                tasks.push(safeFetch('/api/incidental-type-masters/', setIncidentalTypes, m => m.status ? m.expense_type : null));
+            }
+
+            await Promise.allSettled(tasks);
         };
         fetchMasters();
 
@@ -3136,11 +3129,11 @@ const TravelExpenseGrid = ({
             </div>
 
             <div className="categorized-sections-grid single-mode">
-                {activeCategory === 'Travel' && <CategoryTable nature="Travel" title="Long Distance Travel" icon={<Plane size={18} />} />}
-                {activeCategory === 'Local Travel' && <CategoryTable nature="Local Travel" title="Local Conveyance" icon={<Car size={18} />} />}
-                {activeCategory === 'Food' && <CategoryTable nature="Food" title="Food & Refreshments" icon={<Coffee size={18} />} />}
-                {activeCategory === 'Accommodation' && <CategoryTable nature="Accommodation" title="Stay & Lodging" icon={<Hotel size={18} />} />}
-                {activeCategory === 'Incidental' && <CategoryTable nature="Incidental" title="Incidental Expenses" icon={<Receipt size={18} />} />}
+                {activeCategory === 'Travel' && CategoryTable({ nature: "Travel", title: "Long Distance Travel", icon: <Plane size={18} /> })}
+                {activeCategory === 'Local Travel' && CategoryTable({ nature: "Local Travel", title: "Local Conveyance", icon: <Car size={18} /> })}
+                {activeCategory === 'Food' && CategoryTable({ nature: "Food", title: "Food & Refreshments", icon: <Coffee size={18} /> })}
+                {activeCategory === 'Accommodation' && CategoryTable({ nature: "Accommodation", title: "Stay & Lodging", icon: <Hotel size={18} /> })}
+                {activeCategory === 'Incidental' && CategoryTable({ nature: "Incidental", title: "Incidental Expenses", icon: <Receipt size={18} /> })}
                 {activeCategory === 'Review' && renderReviewSummary()}
             </div>
 
