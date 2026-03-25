@@ -14,6 +14,7 @@ FACE_CASCADE = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_fronta
 def get_face_encoding_from_image(image_file):
     """
     Detects face and returns a base64 encoded string of the face region (cropped and grayscale)
+    Optimized: Resizes large images before processing to speed up detection.
     """
     try:
         # Read image from file object
@@ -23,12 +24,23 @@ def get_face_encoding_from_image(image_file):
         if img is None:
             logger.error("Could not decode image")
             return None
+
+        # Speed Optimization: Resize large images to a manageable size (max 600px)
+        # This makes Haar Cascade detection 5-10x faster on high-res photos
+        h, w = img.shape[:2]
+        max_dim = 600
+        if max(h, w) > max_dim:
+            scale = max_dim / max(h, w)
+            img = cv2.resize(img, (int(w * scale), int(h * scale)))
             
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        # Apply Histogram Equalization
         gray = cv2.equalizeHist(gray)
-        faces = FACE_CASCADE.detectMultiScale(gray, 1.3, 5)
         
+        # Multi-pass detection for robustness (Fast on 600px)
+        faces = FACE_CASCADE.detectMultiScale(gray, 1.1, 5, minSize=(40, 40))
+        if len(faces) == 0:
+            faces = FACE_CASCADE.detectMultiScale(gray, 1.05, 3, minSize=(30, 30))
+            
         if len(faces) == 0:
             logger.warning("No face detected in enrollment")
             return None
@@ -39,6 +51,7 @@ def get_face_encoding_from_image(image_file):
         
         # Resize to fixed size for consistency
         face_roi = cv2.resize(face_roi, (200, 200))
+        face_roi = cv2.GaussianBlur(face_roi, (3, 3), 0)
         
         # Encode as base64 string
         _, buffer = cv2.imencode('.jpg', face_roi)
@@ -48,10 +61,10 @@ def get_face_encoding_from_image(image_file):
         logger.error(f"Error in face encoding: {e}")
         return None
 
-def compare_faces(stored_face_b64, current_image_file, threshold=40):
+def compare_faces(stored_face_b64, current_image_file, threshold=0.1):
     """
-    Compares current image with stored face using Template Matching or LBPH-like distance.
-    Including multi-pass detection for robustness.
+    Compares current image with stored face using Template Matching.
+    Optimized: Resizes capture to 600px max to speed up detection.
     """
     try:
         if not stored_face_b64:
@@ -68,44 +81,47 @@ def compare_faces(stored_face_b64, current_image_file, threshold=40):
         
         if current_img is None:
             return False, 1.0, "Could not decode image"
+
+        # Speed Optimization: Resize to max 600px
+        h, w = current_img.shape[:2]
+        max_dim = 600
+        if max(h, w) > max_dim:
+            scale = max_dim / max(h, w)
+            current_img = cv2.resize(current_img, (int(w * scale), int(h * scale)))
             
         gray = cv2.cvtColor(current_img, cv2.COLOR_BGR2GRAY)
         
-        # Multi-pass detection for robustness
-        faces = []
-        # Pass 1: Standard thorough detection
-        faces = FACE_CASCADE.detectMultiScale(gray, 1.1, 5, minSize=(30, 30))
-        
-        # Pass 2: If failed, try more tolerant parameters
+        # Multi-pass detection (Fast on 600px)
+        faces = FACE_CASCADE.detectMultiScale(gray, 1.1, 5, minSize=(40, 40))
         if len(faces) == 0:
             faces = FACE_CASCADE.detectMultiScale(gray, 1.05, 3, minSize=(30, 30))
-            
-        # Pass 3: If still failed, try strict but smaller scale
-        if len(faces) == 0:
-            faces = FACE_CASCADE.detectMultiScale(gray, 1.2, 2, minSize=(20, 20))
         
         if len(faces) == 0:
-            logger.warning("No face detected in verification capture after all passes")
-            return False, 1.0, "No face detected. Please ensure you are in a well-lit area and look directly at the camera."
+            return False, 1.0, "No face detected. Please ensure good lighting."
             
         # Get the largest face
         x, y, w, h = max(faces, key=lambda f: f[2] * f[3])
         current_face = gray[y:y+h, x:x+w]
+        
+        # Standardize sizes to 200x200
         current_face = cv2.resize(current_face, (200, 200))
+        stored_face = cv2.resize(stored_face, (200, 200))
         
         # Pre-processing
         current_face = cv2.equalizeHist(current_face)
         current_face = cv2.GaussianBlur(current_face, (5, 5), 0)
-        stored_face_blurred = cv2.GaussianBlur(stored_face, (5, 5), 0)
+        stored_face = cv2.equalizeHist(stored_face)
+        stored_face = cv2.GaussianBlur(stored_face, (5, 5), 0)
         
-        # Template Matching
-        result = cv2.matchTemplate(current_face, stored_face_blurred, cv2.TM_CCOEFF_NORMED)
+        # Template Matching with inner core (160x160) for shift tolerance
+        template = stored_face[20:180, 20:180] 
+        result = cv2.matchTemplate(current_face, template, cv2.TM_CCOEFF_NORMED)
         _, match_val, _, _ = cv2.minMaxLoc(result)
         
         logger.info(f"FRS Match Value: {match_val:.4f}")
         
-        # Match threshold
-        is_match = match_val > 0.55
+        # Match threshold set to 0.65
+        is_match = match_val > 0.65
         
         return is_match, float(1.0 - match_val), None
         

@@ -117,7 +117,7 @@ const TravelStory = () => {
         try {
             const decodedId = decodeId(id);
             const endpoint = decodedId.toString().startsWith('ITS-') ? 'travels' : 'trips';
-            
+
             // Build query params for filtering
             const params = {};
             if (dateFilter !== 'All') {

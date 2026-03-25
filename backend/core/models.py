@@ -29,10 +29,10 @@ class User(models.Model):
         ('tropical', 'Tropical Teal')
     ])
 
- # FRS Fields
+    # FRS Fields (Stored as base64 in DB as requested)
     is_face_enrolled = models.BooleanField(default=False)
     face_encoding = models.TextField(null=True, blank=True)
-    face_photo = models.ImageField(upload_to='face_photos/', null=True, blank=True)
+    face_photo = models.TextField(null=True, blank=True)
     allow_photo_reset = models.BooleanField(default=False)
     frs_logs_cleared_at = models.DateTimeField(null=True, blank=True)
 
@@ -322,7 +322,7 @@ class AuditLog(models.Model):
 
 class AttendanceFRS(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='frs_attendance')
-    photo_captured = models.ImageField(upload_to='attendance_captures/')
+    photo_captured = models.TextField() # Stored as base64 in DB
     timestamp = models.DateTimeField(auto_now_add=True, db_index=True)
     is_matched = models.BooleanField(default=False)
     match_score = models.FloatField(default=0.0)
@@ -343,7 +343,7 @@ class FaceRegistrationRequest(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='face_registration_requests')
     reporting_manager = models.ForeignKey(User, on_delete=models.CASCADE, related_name='managed_face_registrations')
     face_encoding = models.TextField()
-    face_photo = models.ImageField(upload_to='pending_face_photos/', null=True, blank=True)
+    face_photo = models.TextField(null=True, blank=True) # Stored as base64 in DB
     status = models.CharField(max_length=20, default='Pending') # Pending, Approved, Rejected
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

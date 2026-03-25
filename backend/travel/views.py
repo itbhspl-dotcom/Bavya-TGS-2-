@@ -2076,7 +2076,7 @@ class BulkActivityBatchViewSet(viewsets.ModelViewSet):
         # Row 2 – Instructional note (merged across all columns)
         ws.merge_cells("A2:E2")
         note_cell = ws.cell(row=2, column=1,
-            value="📋  Instructions: Date must be ≥ today  |  Time must be ≥ current time (HH:MM, 24h)  |  "
+            value="📋  Instructions: Date must be ≥ today  |  If Date = Today, Time must be > current time (HH:MM)  |  "
                   "Choose From/To Location from the dropdown  |  Purpose is free text")
         note_cell.font      = NOTE_FONT
         note_cell.fill      = NOTE_FILL
@@ -2084,8 +2084,7 @@ class BulkActivityBatchViewSet(viewsets.ModelViewSet):
         ws.row_dimensions[2].height = 22
 
         # Row 3 – Sample data row
-        today_str = datetime.date.today().strftime("%Y-%m-%d")
-
+        # Values for pre-filled row 3
         # Explicitly convert to IST (UTC+5:30) — server TIME_ZONE is UTC
         from zoneinfo import ZoneInfo
         ist_tz    = ZoneInfo('Asia/Kolkata')
@@ -2094,19 +2093,26 @@ class BulkActivityBatchViewSet(viewsets.ModelViewSet):
         # Round time to nearest 5 minutes
         minute_rounded = (now_ist.minute // 5) * 5
         now_rounded = now_ist.replace(minute=minute_rounded, second=0, microsecond=0)
-        time_str    = now_rounded.strftime("%H:%M")
-        # Excel stores time as a fraction of a day (e.g. 09:30 = 9.5/24)
-        now_fraction = (now_ist.hour * 3600 + now_ist.minute * 60) / 86400
 
-        sample = [today_str, time_str, locations[0] if locations else "Office",
-                  locations[1] if len(locations) > 1 else "Client Site",
-                  "Site Inspection / Field Visit"]
+        # Use actual date/time objects so validation formulas can compare them
+        today_obj = datetime.date.today()
+        # Ensure Row 3 sample data is treated as date/time
+        sample_data = [
+            today_obj,
+            now_rounded.time(), 
+            locations[0] if locations else "Office",
+            locations[1] if len(locations) > 1 else "Client Site",
+            "Site Inspection / Field Visit"
+        ]
         ws.row_dimensions[3].height = 20
-        for col_idx, val in enumerate(sample, start=1):
+        for col_idx, val in enumerate(sample_data, start=1):
             cell = ws.cell(row=3, column=col_idx, value=val)
             cell.font      = DATA_FONT
             cell.alignment = columns[col_idx - 1][2]
             cell.border    = BORDER
+            # Set explicit formats for A and B
+            if col_idx == 1: cell.number_format = 'YYYY-MM-DD'
+            if col_idx == 2: cell.number_format = 'HH:MM'
 
         # Rows 4-103 – Empty data rows (100 rows)
         for row in range(4, 104):
@@ -2116,6 +2122,9 @@ class BulkActivityBatchViewSet(viewsets.ModelViewSet):
                 cell.font      = DATA_FONT
                 cell.alignment = columns[col_idx - 1][2]
                 cell.border    = BORDER
+                # Column A = Date, Column B = Time
+                if col_idx == 1: cell.number_format = 'YYYY-MM-DD'
+                if col_idx == 2: cell.number_format = 'HH:MM'
 
         DATA_ROWS = "3:103"   # applies to sample + 100 blank rows
 
@@ -2138,10 +2147,8 @@ class BulkActivityBatchViewSet(viewsets.ModelViewSet):
         dv_date.sqref = "A3:A103"   # Column A
 
         # ── Validation 2: Time format HH:MM and 5-min increments ──────────────
-        # Use a custom formula to enforce both: >= now AND multi-of-5-mins
-        # 1440 = minutes in a day. ROUND ensures precision.
-        # Custom formulas in Excel Validation MUST start with '='
-        time_formula = f"=AND(MOD(ROUND(B3*1440,0),5)=0, B3>={float(now_fraction):.8f})"
+        # Use INT(A3) to compare just the date part of the cell value.
+        time_formula = "=AND(MOD(ROUND(B3*1440,0),5)=0, OR(INT(A3)>TODAY(), B3>MOD(NOW(),1)))"
         
         dv_time = DataValidation(
             type="custom",
@@ -2149,10 +2156,10 @@ class BulkActivityBatchViewSet(viewsets.ModelViewSet):
             showDropDown=False,
             showErrorMessage=True,
             errorTitle="Invalid Time",
-            error=f"Time must be a multiple of 5 minutes (e.g., 12:10, 12:15) and NOT in the past.",
+            error="Time must be a multiple of 5 minutes. If selected date is today, time must be > current time.",
             showInputMessage=True,
             promptTitle="Time (HH:MM)",
-            prompt=f"Enter time in HH:MM (24h). Must be ≥ {time_str} and a multiple of 5 minutes."
+            prompt="Enter time in HH:MM (24h). If date is today, it must be > current time. Must be a multiple of 5 minutes."
         )
         ws.add_data_validation(dv_time)
         dv_time.sqref = "B3:B103"   # Column B

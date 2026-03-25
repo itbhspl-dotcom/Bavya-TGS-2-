@@ -395,6 +395,8 @@ def enroll_face_view(request):
     
     # Convert base64 to file
     image_file = base64_to_file(face_image_base64, f"pending_face_{user.employee_id}.jpg")
+    if not image_file:
+        return Response({'error': 'Failed to process image data'}, status=status.HTTP_400_BAD_REQUEST)
     
     # Get encoding (validate that face exists)
     encoding_json = get_face_encoding_from_image(image_file)
@@ -405,12 +407,12 @@ def enroll_face_view(request):
     if hasattr(image_file, 'seek'):
         image_file.seek(0)
         
-    # Create request instead of updating user directly
+    # Create request with base64 data directly in DB
     FaceRegistrationRequest.objects.create(
         user=user,
         reporting_manager=user.reporting_manager,
         face_encoding=encoding_json,
-        face_photo=image_file,
+        face_photo=face_image_base64, # Save full base64 string
         status='Pending'
     )
     
@@ -456,46 +458,41 @@ def verify_face_view(request):
     except Exception as e:
         return Response({'error': 'Error during face comparison'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
-    # Reset file pointer for DB save
-    if hasattr(image_file, 'seek'):
-        image_file.seek(0)
-    
-    # Create attendance record
-    attendance = AttendanceFRS.objects.create(
-        user=user,
-        photo_captured=image_file,
-        is_matched=is_match,
-        match_score=1.0 - distance,
-        latitude=lat,
-        longitude=lng,
-        location_address=address,
-        status='Recorded'
-    )
-    
-    # Notify Reporting Manager
-    if user.reporting_manager:
-        Notification.objects.create(
-            user=user.reporting_manager,
-            title="FRS Attendance Capture",
-            message=f"{user.name} (ID: {user.employee_id}) captured attendance via FRS at {address or 'captured location'}.",
-            type="info"
+    if is_match:
+        # Create attendance record only on match
+        # Store captured photo as base64 Directly in DB
+        AttendanceFRS.objects.create(
+            user=user,
+            photo_captured=face_image_base64, 
+            is_matched=True,
+            match_score=1.0 - distance,
+            latitude=lat,
+            longitude=lng,
+            location_address=address,
+            status='Recorded'
         )
         
-    # Notify HR
-    hr_users = User.objects.filter(role__name__icontains='hr')
-    for hr in hr_users:
-        if hr != user.reporting_manager: # Avoid duplicate notify if RM is also HR
+        # Notify Reporting Manager
+        if user.reporting_manager:
             Notification.objects.create(
-                user=hr,
-                title="FRS Attendance Log",
-                message=f"Attendance captured for {user.name} (ID: {user.employee_id}) via Biometric FRS.",
+                user=user.reporting_manager,
+                title="FRS Attendance Capture",
+                message=f"{user.name} (ID: {user.employee_id}) captured attendance via FRS at {address or 'captured location'}.",
                 type="info"
             )
-    
-    if is_match:
+            
         return Response({'match': True, 'message': 'Face verification successful'})
     else:
-        return Response({'match': False, 'message': 'Face Mismatch. Access Denied.'}, status=status.HTTP_401_UNAUTHORIZED)
+        # MISMATCH: Return 200 OK with match:false to prevent mobile app logout
+        AuditLog.objects.create(
+            user=user,
+            action='FRS_MISMATCH',
+            model_name='AttendanceFRS',
+            object_repr=f'Mismatch for {user.employee_id}',
+            ip_address=request.META.get('REMOTE_ADDR'),
+            details={'distance': distance, 'location': address}
+        )
+        return Response({'match': False, 'message': 'Face Mismatch. Access Denied.'}, status=status.HTTP_403_FORBIDDEN)
 
 @api_view(['POST'])
 @permission_classes([IsCustomAuthenticated])
@@ -617,16 +614,14 @@ def get_face_registration_requests_view(request):
     
     data = []
     for r in requests:
-        photo_url = None
-        if r.face_photo:
-            photo_url = request.build_absolute_uri(r.face_photo.url)
-            
         data.append({
             'id': r.id,
             'employee_name': r.user.name,
             'employee_id': r.user.employee_id,
-            'photo_url': photo_url,
-            'created_at': r.created_at.isoformat(),
+            'photo_url': r.face_photo, # Base64 from DB
+            'created_at': r.created_at,
+            'status': r.status,
+            'reporting_manager': r.reporting_manager.name
         })
     return Response(data)
 
@@ -688,9 +683,8 @@ def handle_face_registration_request_view(request):
 @permission_classes([IsCustomAuthenticated])
 def get_pending_frs_approvals_view(request):
     manager = request.custom_user
-    # Fetch all recently recorded attendance logs
-    # We show 'Recorded' logs which replace the 'Pending' approval ones
-    attendance_qs = AttendanceFRS.objects.filter(status='Recorded').select_related('user').order_by('-timestamp')
+    # Fetch all recently recorded attendance logs (matches only as per user request)
+    attendance_qs = AttendanceFRS.objects.filter(status='Recorded', is_matched=True).select_related('user').order_by('-timestamp')
     
     data = []
     import pytz
@@ -704,8 +698,6 @@ def get_pending_frs_approvals_view(request):
             if not is_hr:
                 continue
             
-        photo_url = request.build_absolute_uri(a.photo_captured.url) if a.photo_captured else None
-        
         # Format timestamp to local for better display
         local_dt = a.timestamp.astimezone(local_tz)
         
@@ -716,7 +708,7 @@ def get_pending_frs_approvals_view(request):
             'date': local_dt.strftime('%Y-%m-%d'),
             'time': local_dt.strftime('%H:%M'),
             'timestamp': local_dt.isoformat(),
-            'photo_url': photo_url,
+            'photo_url': a.photo_captured, # This is now base64 data
             'latitude': a.latitude,
             'longitude': a.longitude,
             'address': a.location_address,
