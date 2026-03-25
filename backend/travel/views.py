@@ -233,7 +233,17 @@ class TripListCreateView(generics.ListCreateAPIView):
                 Q(current_approver=user)
             ).distinct().order_by('-created_at')
             
-        return Trip.objects.filter(user=user, consider_as_local=False).order_by('-created_at')
+        queryset = Trip.objects.filter(user=user, consider_as_local=False)
+        search_query = self.request.query_params.get('search')
+        if search_query:
+            from django.db.models import Q
+            queryset = queryset.filter(
+                Q(trip_id__icontains=search_query) |
+                Q(purpose__icontains=search_query) |
+                Q(source__icontains=search_query) |
+                Q(destination__icontains=search_query)
+            )
+        return queryset.order_by('-created_at')
 
     def perform_create(self, serializer, is_local=False):
         user = getattr(self.request, 'custom_user', None)
@@ -308,7 +318,17 @@ class TravelListCreateView(TripListCreateView):
     def get_queryset(self):
         user = getattr(self.request, 'custom_user', None)
         if not user: return Trip.objects.none()
-        return Trip.objects.filter(user=user, consider_as_local=True).order_by('-created_at')
+        queryset = Trip.objects.filter(user=user, consider_as_local=True)
+        search_query = self.request.query_params.get('search')
+        if search_query:
+            from django.db.models import Q
+            queryset = queryset.filter(
+                Q(trip_id__icontains=search_query) |
+                Q(purpose__icontains=search_query) |
+                Q(source__icontains=search_query) |
+                Q(destination__icontains=search_query)
+            )
+        return queryset.order_by('-created_at')
 
     def perform_create(self, serializer, is_local=True): # type: ignore
         super().perform_create(serializer, is_local=is_local)
@@ -415,11 +435,20 @@ class TripTrackingView(APIView):
     def post(self, request, trip_id):
         print(f"DEBUG: TripTrackingView.post called for trip_id: {trip_id}")
         real_trip_id = decode_id(trip_id)
+        print(f"DEBUG: Decoded trip_id: {real_trip_id}")
+        
+        trip = None
         try:
             trip = Trip.objects.get(trip_id=real_trip_id)
         except Trip.DoesNotExist:
-            print(f"DEBUG: Trip {real_trip_id} not found for POST")
-            return Response({"error": "Trip not found"}, status=status.HTTP_404_NOT_FOUND)
+            # Fallback: check if the trip exists but is soft-deleted
+            try:
+                deleted_trip = Trip.all_objects.get(trip_id=real_trip_id)
+                print(f"DEBUG: Trip {real_trip_id} exists but is soft-deleted (is_deleted={deleted_trip.is_deleted}). Allowing tracking.")
+                trip = deleted_trip  # Allow tracking even for soft-deleted trips
+            except Trip.DoesNotExist:
+                print(f"DEBUG: Trip {real_trip_id} does NOT exist in DB at all (even in all_objects). POST rejected.")
+                return Response({"error": "Trip not found"}, status=status.HTTP_404_NOT_FOUND)
 
         # Only trip owner can post tracking points
         user = getattr(request, 'custom_user', None)
@@ -434,12 +463,112 @@ class TripTrackingView(APIView):
         
         serializer = TripTrackingSerializer(data=data)
         if serializer.is_valid():
-            serializer.save()
+            tracking = serializer.save()
             print("DEBUG: Tracking point saved successfully")
+            
+            # --- UPDATE TripGeofenceLocationSet ---
+            try:
+                from django.db import connection
+                if 'travel_tripgeofencelocationset' in connection.introspection.table_names():
+                    from travel.models import TripGeofenceLocationSet
+                    geofence_set, created = TripGeofenceLocationSet.objects.get_or_create(trip=trip)
+                    loc_data = geofence_set.location_data
+                    if not isinstance(loc_data, list):
+                        loc_data = []
+                    # add point to the set
+                    loc_data.append({
+                        "latitude": float(tracking.latitude),
+                        "longitude": float(tracking.longitude),
+                        "timestamp": tracking.timestamp.isoformat() if tracking.timestamp else None,
+                        "accuracy": tracking.accuracy,
+                        "speed": tracking.speed
+                    })
+                    geofence_set.location_data = loc_data
+                    geofence_set.last_latitude = tracking.latitude
+                    geofence_set.last_longitude = tracking.longitude
+                    geofence_set.save()
+            except Exception as e:
+                print(f"DEBUG: Error updating Geofence Location Set: {e}")
+            # --------------------------------------
+
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         
         print(f"DEBUG: Serializer errors: {serializer.errors}")
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+class TeamLiveTrackingView(APIView):
+    permission_classes = [IsCustomAuthenticated]
+
+    def get(self, request):
+        user = getattr(request, 'custom_user', None)
+        if not user:
+            return Response({"error": "Unauthorized"}, status=403)
+        
+        from django.utils import timezone
+        today = timezone.now().date()
+        
+        # Get ALL active approved trips today (start_date <= today <= end_date)
+        # We must filter reporting_manager in Python since it's a dynamic property on the User model
+        active_trips = Trip.all_objects.filter(
+            start_date__lte=today,
+            end_date__gte=today,
+            status__iexact='Approved'
+        )
+
+        from core.models import Session
+        from django.db import connection
+        
+        has_geofence_table = 'travel_tripgeofencelocationset' in connection.introspection.table_names()
+        if has_geofence_table:
+            from travel.models import TripGeofenceLocationSet
+
+        results = []
+        for trip in active_trips:
+            if not trip.user:
+                continue
+                
+            # Evaluate the property to check if current user is the manager
+            rm = trip.user.reporting_manager
+            if not rm or rm.employee_id != user.employee_id:
+                continue
+
+            # Check if the employee is currently logged out based on their most recent session
+            latest_session = Session.objects.filter(user=trip.user).order_by('-created_at').first()
+            is_logged_in = latest_session.is_active if latest_session else False
+
+            # In case the user is logged out, show the last synced geofence from TripGeofenceLocationSet
+            geofence_set = None
+            if has_geofence_table:
+                try:
+                    geofence_set = TripGeofenceLocationSet.objects.filter(trip=trip).first()
+                except Exception:
+                    pass
+            
+            latest_tracking = TripTracking.objects.filter(trip=trip).order_by('-timestamp').first()
+            
+            lat = float(latest_tracking.latitude) if latest_tracking else (float(geofence_set.last_latitude) if geofence_set and geofence_set.last_latitude else None)
+            lng = float(latest_tracking.longitude) if latest_tracking else (float(geofence_set.last_longitude) if geofence_set and geofence_set.last_longitude else None)
+            accuracy = latest_tracking.accuracy if latest_tracking else None
+            speed = latest_tracking.speed if latest_tracking else None
+            last_updated = latest_tracking.timestamp if latest_tracking else (geofence_set.last_updated if geofence_set else None)
+
+            results.append({
+                "trip_id": trip.trip_id,
+                "employee_name": trip.user.name,
+                "employee_id": trip.user.employee_id,
+                "destination": trip.destination,
+                "purpose": trip.purpose,
+                "consider_as_local": trip.consider_as_local,
+                "status": trip.status,
+                "is_logged_out": not is_logged_in,
+                "latitude": lat,
+                "longitude": lng,
+                "last_updated": last_updated,
+                "accuracy": accuracy,
+                "speed": speed,
+            })
+
+        return Response(results, status=200)
 
 class ApprovalCountView(APIView):
     permission_classes = [IsCustomAuthenticated]
@@ -529,37 +658,86 @@ class ApprovalsView(APIView):
                 advances = TravelAdvance.objects.filter(status__in=history_statuses)
                 claims = TravelClaim.objects.filter(status__in=history_statuses)
         else:
-            # Pending Tab
-            if is_admin:
-                finance_pending = ['PENDING_EXECUTIVE', 'PENDING_HEAD', 'PENDING_FINAL_RELEASE', 'REJECTED_BY_HEAD']
-                trips = Trip.objects.filter(status__in=['Pending', 'Submitted', 'Forwarded', 'Manager Approved', 'HR Approved'] + finance_pending)
-                advances = TravelAdvance.objects.filter(status__in=['Pending', 'Submitted', 'Forwarded', 'Manager Approved', 'HR Approved'] + finance_pending)
-                claims = TravelClaim.objects.filter(status__in=['Pending', 'Submitted', 'Forwarded', 'Manager Approved', 'HR Approved'] + finance_pending)
-            elif is_finance:
-                if is_finance_head:
-                    advances = TravelAdvance.objects.filter(status='PENDING_HEAD')
-                    claims = TravelClaim.objects.filter(status='PENDING_HEAD')
-                else:
-                    pending_money_statuses = ['PENDING_EXECUTIVE', 'REJECTED_BY_HEAD', 'PENDING_FINAL_RELEASE']
-                    advances = TravelAdvance.objects.filter(status__in=pending_money_statuses)
-                    claims = TravelClaim.objects.filter(status__in=pending_money_statuses)
-                
-                # Filter by project/dept if needed
-                finance_dept = user.department
-                if finance_dept and finance_dept.lower() not in ['finance', 'finance department', 'accounts', 'finance head dept', 'finance executive dept']:
-                    advances = advances.filter(trip__project_code__istartswith=finance_dept)
-                    claims = claims.filter(trip__project_code__istartswith=finance_dept)
-            elif is_hr:
-                # HR verification stage
-                trips = Trip.objects.filter(status='Manager Approved')
-                advances = TravelAdvance.objects.filter(status='Manager Approved')
-                claims = TravelClaim.objects.filter(status='Manager Approved')
+            # Multi-Tab Workflow Logic (Action Required, Under Process, etc.)
+            if tab == 'processing':
+                trips = Trip.objects.filter(status='Under Process')
+                advances = TravelAdvance.objects.filter(status='Under Process')
+                claims = TravelClaim.objects.filter(status='Under Process')
+                # For Managers, also filter by current_approver
+                if not is_finance and not is_admin:
+                    trips = trips.filter(current_approver=user)
+                    advances = advances.filter(current_approver=user)
+                    claims = claims.filter(current_approver=user)
+            elif tab == 'completed':
+                completed_statuses = ['Paid', 'COMPLETED', 'Settled']
+                trips = Trip.objects.filter(status__in=completed_statuses)
+                advances = TravelAdvance.objects.filter(status__in=completed_statuses)
+                claims = TravelClaim.objects.filter(status__in=completed_statuses)
+                if not is_finance and not is_admin:
+                    trips = trips.filter(user=user)
+                    advances = advances.filter(trip__user=user)
+                    claims = claims.filter(trip__user=user)
+            elif tab == 'rejected':
+                rejected_statuses = ['Rejected', 'Rejected by Finance', 'Cancelled']
+                trips = Trip.objects.filter(status__in=rejected_statuses)
+                advances = TravelAdvance.objects.filter(status__in=rejected_statuses)
+                claims = TravelClaim.objects.filter(status__in=rejected_statuses)
+                if not is_finance and not is_admin:
+                    trips = trips.filter(user=user)
+                    advances = advances.filter(trip__user=user)
+                    claims = claims.filter(trip__user=user)
             else:
-                # Regular hierarchy
-                trips = Trip.objects.filter(current_approver=user, status__in=['Pending', 'Submitted', 'Forwarded'])
-                advances = TravelAdvance.objects.filter(current_approver=user, status__in=['Pending', 'Submitted', 'Forwarded'])
-                claims = TravelClaim.objects.filter(current_approver=user, status__in=['Pending', 'Submitted', 'Forwarded'])
+                # DEFAULT: Action Required (Pending)
+                if is_admin:
+                    finance_pending = ['PENDING_EXECUTIVE', 'PENDING_HEAD', 'PENDING_FINAL_RELEASE', 'REJECTED_BY_HEAD']
+                    trips = Trip.objects.filter(status__in=['Pending', 'Submitted', 'Forwarded', 'Manager Approved', 'HR Approved'] + finance_pending)
+                    advances = TravelAdvance.objects.filter(status__in=['Pending', 'Submitted', 'Forwarded', 'Manager Approved', 'HR Approved'] + finance_pending)
+                    claims = TravelClaim.objects.filter(status__in=['Pending', 'Submitted', 'Forwarded', 'Manager Approved', 'HR Approved'] + finance_pending)
+                elif is_finance:
+                    if is_finance_head:
+                        advances = TravelAdvance.objects.filter(status='PENDING_HEAD')
+                        claims = TravelClaim.objects.filter(status='PENDING_HEAD')
+                    else:
+                        pending_money_statuses = ['PENDING_EXECUTIVE', 'REJECTED_BY_HEAD', 'PENDING_FINAL_RELEASE', 'HR Approved', 'Approved']
+                        advances = TravelAdvance.objects.filter(status__in=pending_money_statuses)
+                        claims = TravelClaim.objects.filter(status__in=pending_money_statuses)
+                    
+                    # Filter by project/dept if needed
+                    finance_dept = user.department
+                    if finance_dept and finance_dept.lower() not in ['finance', 'finance department', 'accounts', 'finance head dept', 'finance executive dept']:
+                        advances = advances.filter(trip__project_code__istartswith=finance_dept)
+                        claims = claims.filter(trip__project_code__istartswith=finance_dept)
+                elif is_hr:
+                    # HR verification stage
+                    trips = Trip.objects.filter(status='Manager Approved')
+                    advances = TravelAdvance.objects.filter(status='Manager Approved')
+                    claims = TravelClaim.objects.filter(status='Manager Approved')
+                else:
+                    # Regular hierarchy
+                    trips = Trip.objects.filter(current_approver=user, status__in=['Pending', 'Submitted', 'Forwarded'])
+                    advances = TravelAdvance.objects.filter(current_approver=user, status__in=['Pending', 'Submitted', 'Forwarded'])
+                    claims = TravelClaim.objects.filter(current_approver=user, status__in=['Pending', 'Submitted', 'Forwarded'])
         
+        # Apply search filter if provided
+        search_query = request.query_params.get('search')
+        if search_query:
+            trips = trips.filter(
+                Q(trip_id__icontains=search_query) |
+                Q(user__name__icontains=search_query) |
+                Q(purpose__icontains=search_query) |
+                Q(source__icontains=search_query) |
+                Q(destination__icontains=search_query)
+            ).distinct()
+            advances = advances.filter(
+                Q(trip__trip_id__icontains=search_query) |
+                Q(trip__user__name__icontains=search_query) |
+                Q(purpose__icontains=search_query)
+            ).distinct()
+            claims = claims.filter(
+                Q(trip__trip_id__icontains=search_query) |
+                Q(trip__user__name__icontains=search_query)
+            ).distinct()
+
         tasks = []
         # Support filtering by type if specified
         if type_filter in ['all', 'trip']:

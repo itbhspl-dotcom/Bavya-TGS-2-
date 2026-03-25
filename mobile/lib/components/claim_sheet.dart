@@ -286,20 +286,4 @@ class _ClaimSheetState extends State<ClaimSheet> {
     );
   }
 
-  Widget _lockedState() {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 40),
-        child: Column(
-          children: [
-            const Icon(Icons.lock_clock_rounded, size: 60, color: Color(0xFF7C1D1D)),
-            const SizedBox(height: 20),
-            Text('Settlement Locked', style: GoogleFonts.interTight(fontSize: 20, fontWeight: FontWeight.w900)),
-            const SizedBox(height: 10),
-            Text('Claims can only be filed once the trip has been Approved or Completed.', textAlign: TextAlign.center, style: GoogleFonts.inter(color: Colors.black45, fontWeight: FontWeight.w600)),
-          ],
-        ),
-      ),
-    );
-  }
 }

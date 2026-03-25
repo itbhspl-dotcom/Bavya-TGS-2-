@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import '../models/trip_model.dart';
 import 'api_service.dart';
@@ -35,15 +36,42 @@ class TripService {
     return [];
   }
 
+  String _resolveTripId(String id) {
+    // id may be raw or base64-url encoded. Decode encoded IDs for routing decisions.
+    if (id.startsWith('ITS-') || id.startsWith('TRP-') || id.startsWith('TRV-')) {
+      return id;
+    }
+
+    try {
+      var normalized = id;
+      // Add padding for Base64 decode as needed
+      final pad = normalized.length % 4;
+      if (pad != 0) {
+        normalized = normalized + ('=' * (4 - pad));
+      }
+      // base64Url for URL-safe strings
+      final decoded = utf8.decode(base64Url.decode(normalized));
+      if (decoded.isNotEmpty) {
+        return decoded;
+      }
+    } catch (_) {
+      // Not a base64-encoded ID; use as-is
+    }
+
+    return id;
+  }
+
   Future<Trip> fetchTripDetails(String id) async {
-    final endpoint = id.startsWith('ITS-') ? ApiConstants.travelDetails : ApiConstants.tripDetails;
+    final resolvedId = _resolveTripId(id);
+    final endpoint = resolvedId.startsWith('ITS-') ? ApiConstants.travelDetails : ApiConstants.tripDetails;
     final url = endpoint.replaceFirst('{id}', id);
     final response = await _apiService.get(url);
     return Trip.fromJson(response);
   }
 
   Future<void> patchTrip(String tripId, Map<String, dynamic> data) async {
-    final endpoint = tripId.startsWith('ITS-') ? ApiConstants.travelDetails : ApiConstants.tripDetails;
+    final resolvedId = _resolveTripId(tripId);
+    final endpoint = resolvedId.startsWith('ITS-') ? ApiConstants.travelDetails : ApiConstants.tripDetails;
     final url = endpoint.replaceFirst('{id}', tripId);
     await _apiService.patch(url, body: data, includeAuth: true);
   }
@@ -568,6 +596,16 @@ class TripService {
       body: {},
       includeAuth: true,
     );
+  }
+  Future<List<Map<String, dynamic>>> fetchTeamLiveTracking() async {
+    try {
+      final response = await _apiService.get('/api/team/live-tracking/');
+      if (response is List) return List<Map<String, dynamic>>.from(response);
+      return [];
+    } catch (e) {
+      debugPrint('ERROR FETCHING TEAM TRACKING: $e');
+      return [];
+    }
   }
 }
 

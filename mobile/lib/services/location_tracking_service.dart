@@ -1,9 +1,12 @@
 import 'dart:async';
 import 'dart:ui';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_background_service/flutter_background_service.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:geolocator_android/geolocator_android.dart';
+import 'package:geolocator_apple/geolocator_apple.dart';
 import 'package:intl/intl.dart';
 import 'api_service.dart';
 import 'trip_service.dart';
@@ -60,15 +63,12 @@ class LocationTrackingService {
         return;
       }
 
-      // Android 11+ requires BACKGROUND_LOCATION ("always" permission)
-      // starting a foreground service that uses location while app is in
-      // background will crash if only "whileInUse" was granted.  Bail out and
-      // let the UI ask the user to upgrade permissions.
+      // Android 11+ requires BACKGROUND_LOCATION ("always" permission) for pure background launches.
+      // However, if the app is in the foreground right now, 'whileInUse' is perfectly valid to start the tracker!
       if (permission == LocationPermission.whileInUse) {
         debugPrint(
-          'SYNC_TRACKING: Only while-in-use granted; cannot run background service.',
+          'SYNC_TRACKING: Only while-in-use granted. Tracking will start, but might be killed if closed.',
         );
-        return;
       }
 
       final tripService = TripService();
@@ -135,7 +135,7 @@ class LocationTrackingService {
           'SYNC_TRACKING: Starting tracking for trip ${activeTrip.tripId} (ID: ${activeTrip.id})',
         );
         try {
-          await startTracking(activeTrip.id);
+          await startTracking(activeTrip.tripId); // Use tripId (e.g. TRP-2026-1814), not encoded id
           debugPrint('SYNC_TRACKING: startTracking() invoked successfully');
         } catch (e) {
           debugPrint('SYNC_TRACKING: startTracking failed: $e');
@@ -151,9 +151,43 @@ class LocationTrackingService {
     }
   }
 
+  static Future<void> syncCurrentLocation(String tripId) async {
+    try {
+      bool enabled = await Geolocator.isLocationServiceEnabled();
+      var perm = await Geolocator.checkPermission();
+      if (!enabled || perm == LocationPermission.denied || perm == LocationPermission.deniedForever) {
+        return;
+      }
+
+      final position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.medium,
+      ).timeout(const Duration(seconds: 15));
+
+      final apiService = ApiService();
+      final endpoint = '/api/trips/$tripId/tracking/';
+      await apiService.post(
+        endpoint,
+        body: {
+          'latitude': position.latitude,
+          'longitude': position.longitude,
+          'timestamp': DateTime.now().toIso8601String(),
+          'accuracy': position.accuracy,
+          'speed': position.speed,
+        },
+        includeAuth: true,
+      );
+      debugPrint('IMMEDIATE LOCATION SYNCED for $tripId');
+    } catch (e) {
+      debugPrint('IMMEDIATE LOCATION SYNC ERROR: $e');
+    }
+  }
+
   static Future<void> startTracking(String tripId) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('active_tracking_trip_id', tripId);
+
+    // Grab instant location on track start
+    await syncCurrentLocation(tripId);
 
     final service = FlutterBackgroundService();
 
@@ -169,8 +203,15 @@ class LocationTrackingService {
     }
   }
 
-  static void stopTracking() async {
+  static Future<void> stopTracking() async {
     final prefs = await SharedPreferences.getInstance();
+    final tripId = prefs.getString('active_tracking_trip_id');
+    
+    // Grab instant location on track stop/logout
+    if (tripId != null) {
+      await syncCurrentLocation(tripId);
+    }
+    
     await prefs.remove('active_tracking_trip_id');
 
     final service = FlutterBackgroundService();
@@ -182,6 +223,10 @@ class LocationTrackingService {
 
 @pragma('vm:entry-point')
 void onStart(ServiceInstance service) async {
+  // Required for background isolate to use plugins
+  DartPluginRegistrant.ensureInitialized();
+  WidgetsFlutterBinding.ensureInitialized();
+
   // 1. IMMEDIATELY tell Android we are a foreground service to avoid SIG:9 kill
   if (service is AndroidServiceInstance) {
     service.setAsForegroundService();
@@ -191,14 +236,20 @@ void onStart(ServiceInstance service) async {
     );
   }
 
-  // Required for background isolate to use plugins
-  DartPluginRegistrant.ensureInitialized();
-
   // basic sanity checks that often fail silently
   bool enabled = await Geolocator.isLocationServiceEnabled();
   debugPrint('BACKGROUND SERVICE: location service enabled? $enabled');
   LocationPermission perm = await Geolocator.checkPermission();
   debugPrint('BACKGROUND SERVICE: permission status: $perm');
+
+  // Prevent ANRs by aggressively shutting down the service if location cannot be accessed.
+  if (!enabled || 
+      perm == LocationPermission.denied || 
+      perm == LocationPermission.deniedForever) {
+    debugPrint("BACKGROUND SERVICE: Insufficient permissions or GPS disabled. Shutting down.");
+    service.stopSelf();
+    return; // Fast exit prevents Geolocator.getPositionStream crash
+  }
 
   // Initialize static session for the background isolate
   await ApiService.loadSession();
@@ -220,29 +271,40 @@ void onStart(ServiceInstance service) async {
     debugPrint('BACKGROUND SERVICE: Trip ID set to $currentTripId');
   });
 
+  StreamSubscription<Position>? positionStream;
+
   service.on('stopService').listen((event) {
     debugPrint('BACKGROUND SERVICE: Stopping');
+    positionStream?.cancel();
     service.stopSelf();
   });
 
-  // Tracking Logic - Every 30 seconds for a "Live" experience
-  Timer.periodic(const Duration(seconds: 30), (timer) async {
-    try {
-      // Robust location fetch: try current, then last known as fallback
-      Position? position;
-      try {
-        position = await Geolocator.getCurrentPosition(
-          desiredAccuracy: LocationAccuracy.high,
-          timeLimit: const Duration(seconds: 20),
-        );
-      } catch (e) {
-        debugPrint(
-          'BACKGROUND SERVICE: getCurrentPosition failed: $e. Trying last known...',
-        );
-        position = await Geolocator.getLastKnownPosition();
-      }
+  // Tracking Logic - Triggered only when device moves 100 meters
+  late LocationSettings locationSettings;
+  if (defaultTargetPlatform == TargetPlatform.android) {
+    // AndroidSettings allows fallback to standard LocationManager to avoid FusedLocationProvider ANRs on some devices
+    locationSettings = AndroidSettings(
+      accuracy: LocationAccuracy.high,
+      distanceFilter: 100,
+      forceLocationManager: true, 
+    );
+  } else if (defaultTargetPlatform == TargetPlatform.iOS || defaultTargetPlatform == TargetPlatform.macOS) {
+    locationSettings = AppleSettings(
+      accuracy: LocationAccuracy.high,
+      distanceFilter: 100,
+      pauseLocationUpdatesAutomatically: true,
+      activityType: ActivityType.automotiveNavigation,
+    );
+  } else {
+    locationSettings = const LocationSettings(
+      accuracy: LocationAccuracy.high,
+      distanceFilter: 100,
+    );
+  }
 
-      debugPrint('BACKGROUND SERVICE: Loop Start. TripID: $currentTripId');
+  positionStream = Geolocator.getPositionStream(locationSettings: locationSettings).listen((Position? position) async {
+    try {
+      debugPrint('BACKGROUND SERVICE: 100m Movement Detected. TripID: $currentTripId');
       if (position != null && currentTripId != null) {
         try {
           final token = apiService.getToken();
@@ -268,29 +330,27 @@ void onStart(ServiceInstance service) async {
             service.setForegroundNotificationInfo(
               title: "Trip Tracking Active",
               content:
-                  "Last Sync: ${DateFormat('HH:mm').format(DateTime.now())}",
+                  "Last Sync: ${DateFormat('HH:mm').format(DateTime.now())} (Moved 100m)",
             );
           }
         } catch (e) {
           debugPrint('BACKGROUND SERVICE: API Post Error: $e');
-          if (e is ForbiddenException || e is UnauthorizedException) {
-            debugPrint('BACKGROUND SERVICE: Auth failure, stopping.');
+          if (e is ForbiddenException || e is UnauthorizedException || e is NotFoundException || e.toString().contains('404') || e.toString().contains('NotFound')) {
+            debugPrint('BACKGROUND SERVICE: Auth or NotFound failure, stopping.');
+            positionStream?.cancel();
             service.stopSelf();
           }
         }
       } else {
-        debugPrint(
-          'BACKGROUND SERVICE: Missing data. Position: ${position != null}, TripID: $currentTripId',
-        );
         if (service is AndroidServiceInstance) {
           service.setForegroundNotificationInfo(
             title: "Trip Tracking Active",
-            content: "Searching for GPS signal...",
+            content: "Waiting for GPS movement...",
           );
         }
       }
     } catch (e) {
-      debugPrint('BACKGROUND SERVICE: Fatal loop error: $e');
+      debugPrint('BACKGROUND SERVICE: Fatal stream error: $e');
     }
   });
 }

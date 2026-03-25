@@ -200,6 +200,26 @@ class TripTracking(models.Model):
         return f"Tracking for {self.trip_id} at {self.timestamp}"
 
 
+class TripGeofenceLocationSet(models.Model):
+    """
+    Separate table which saves the entire trip or travel related geofence location
+    saved in a single row as a JSON array (set of locations).
+    """
+    trip = models.OneToOneField(Trip, on_delete=models.CASCADE, related_name='geofence_set')
+    location_data = models.JSONField(default=list) 
+    last_latitude = models.DecimalField(max_digits=20, decimal_places=10, null=True, blank=True)
+    last_longitude = models.DecimalField(max_digits=20, decimal_places=10, null=True, blank=True)
+    last_updated = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-last_updated']
+        verbose_name = "Trip Geofence Location Set"
+        verbose_name_plural = "Trip Geofence Location Sets"
+
+    def __str__(self):
+        return f"Geofence Locations for {self.trip.trip_id}"
+
+
 class Expense(SoftDeleteModel):
     CATEGORY_CHOICES = [
         ('Food', 'Food & Refreshments'),

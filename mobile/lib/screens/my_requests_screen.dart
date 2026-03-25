@@ -3,7 +3,8 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import '../services/trip_service.dart';
 import '../models/trip_model.dart';
-import 'trip_details_screen.dart';
+import 'trip_timeline_screen.dart';
+import 'local_travel_timeline_screen.dart';
 
 class MyRequestsScreen extends StatefulWidget {
   final bool hideHeader;
@@ -52,6 +53,7 @@ class _MyRequestsScreenState extends State<MyRequestsScreen> with SingleTickerPr
         'amount': double.tryParse(t.costEstimate.replaceAll(RegExp(r'[^0-9.]'), '')) ?? 0.0,
         'status': t.status,
         'type': 'trip',
+        'consider_as_local': t.considerAsLocal,
         'rawObject': t,
       }).toList();
 
@@ -360,7 +362,15 @@ class _MyRequestsScreenState extends State<MyRequestsScreen> with SingleTickerPr
         child: InkWell(
           onTap: () {
             if (item['type'] == 'trip') {
-              Navigator.push(context, MaterialPageRoute(builder: (context) => TripDetailsScreen(tripId: item['id'])));
+              final bool isLocal = item['consider_as_local'] == true;
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => isLocal 
+                    ? LocalTravelTimelineScreen(tripId: item['id'])
+                    : TripTimelineScreen(tripId: item['id']),
+                ),
+              );
             }
           },
           borderRadius: BorderRadius.circular(24),

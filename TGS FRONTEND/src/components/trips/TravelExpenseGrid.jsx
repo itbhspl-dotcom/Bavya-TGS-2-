@@ -1,5 +1,5 @@
 import { formatIndianCurrency } from '../../utils/formatters';
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
     Plus,
     Trash2,
@@ -130,7 +130,9 @@ const TravelExpenseGrid = ({
     allowedNatures = null,
     // whether to show the bulk upload button (default true)
     showBulkUpload = true,
-    onJobReportClick
+    onJobReportClick,
+    dateFilter = 'Last 7 Days',
+    onFilterChange
 }) => {
     // Master data states
     const [travelModes, setTravelModes] = useState(FALLBACK_TRAVEL_MODES);
@@ -197,6 +199,8 @@ const TravelExpenseGrid = ({
     const [processedBatchIds, setProcessedBatchIds] = useState([]); // Track batches handled in this session
     const [bulkHistory, setBulkHistory] = useState([]);
     const [resubmitModal, setResubmitModal] = useState({ visible: false, batchId: null, rows: [], submitting: false });
+
+    const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
 
     useEffect(() => {
         const fetchMasters = async () => {
@@ -468,11 +472,11 @@ const TravelExpenseGrid = ({
                         return false;
                     }
                 }
-                
+
                 if (row.nature === 'Accommodation') {
                     const checkInObj = parseSafeDate(row.details.checkIn);
                     const checkOutObj = parseSafeDate(row.details.checkOut);
-                    
+
                     if (checkInObj && (checkInObj.getTime() < minDateObj.getTime() || checkInObj.getTime() > maxDateObj.getTime())) {
                         showToast(`Item #${rowNum}: Check-In date is outside trip range.`, "error");
                         return false;
@@ -489,8 +493,9 @@ const TravelExpenseGrid = ({
                 showToast(`Item #${rowNum}: Please enter a valid numeric amount.`, "error");
                 return false;
             }
-            // require bill if any charge present
-            if (parseFloat(row.amount) > 0 && (!row.bills || row.bills.length === 0)) {
+            // require bill if any charge present (Exempt Odometer-based Local Travel as they use Odo photos)
+            const isOdoLocal = row.nature === 'Local Travel' && (row.details.subType === 'Own Car' || row.details.subType === 'Own Bike');
+            if (parseFloat(row.amount) > 0 && !isOdoLocal && (!row.bills || row.bills.length === 0)) {
                 showToast(`Item #${rowNum}: Please upload a bill as amount is entered.`, "error");
                 return false;
             }
@@ -580,14 +585,14 @@ const TravelExpenseGrid = ({
                 if (row.timeDetails.boardingTime) {
                     const m = parseInt(row.timeDetails.boardingTime.split(':')[1]);
                     if (m % 5 !== 0) {
-                        showToast(`Item #${rowNum}: Departure time must be in 5-minute increments (e.g. ${row.timeDetails.boardingTime.split(':')[0]}:${Math.round(m/5)*5}).`, "error");
+                        showToast(`Item #${rowNum}: Departure time must be in 5-minute increments (e.g. ${row.timeDetails.boardingTime.split(':')[0]}:${Math.round(m / 5) * 5}).`, "error");
                         return false;
                     }
                 }
                 if (row.timeDetails.actualTime) {
                     const m = parseInt(row.timeDetails.actualTime.split(':')[1]);
                     if (m % 5 !== 0) {
-                        showToast(`Item #${rowNum}: Arrival time must be in 5-minute increments (e.g. ${row.timeDetails.actualTime.split(':')[0]}:${Math.round(m/5)*5}).`, "error");
+                        showToast(`Item #${rowNum}: Arrival time must be in 5-minute increments (e.g. ${row.timeDetails.actualTime.split(':')[0]}:${Math.round(m / 5) * 5}).`, "error");
                         return false;
                     }
                 }
@@ -1562,8 +1567,41 @@ const TravelExpenseGrid = ({
 
     const isLocked = claimStatus && !['Draft', 'Rejected'].includes(claimStatus);
 
-    const renderCategoryTable = (nature, title, icon) => {
-        const categoryRows = displayRows.filter(r => r.nature === nature);
+    const CategoryTable = ({ nature, title, icon }) => {
+        const categoryRows = (() => {
+            let filtered = displayRows.filter(r => r.nature === nature);
+            
+            if (nature === 'Local Travel') {
+                const limit = new Date();
+                const now = new Date();
+                
+                if (dateFilter === 'Today') {
+                    const today = toYMD(now);
+                    filtered = filtered.filter(r => (r.date || 'Pending') === today);
+                } else if (dateFilter === 'Last 7 Days') {
+                    limit.setDate(limit.getDate() - 7);
+                    const limitStr = toYMD(limit);
+                    const todayStrLocal = toYMD(now);
+                    if (limitStr) {
+                        filtered = filtered.filter(r => {
+                            const d = r.date || 'Pending';
+                            return d >= limitStr && d <= todayStrLocal;
+                        });
+                    }
+                } else if (dateFilter === 'Last 30 Days') {
+                    limit.setDate(limit.getDate() - 30);
+                    const limitStr = toYMD(limit);
+                    const todayStrLocal = toYMD(now);
+                    if (limitStr) {
+                        filtered = filtered.filter(r => {
+                            const d = r.date || 'Pending';
+                            return d >= limitStr && d <= todayStrLocal;
+                        });
+                    }
+                }
+            }
+            return filtered;
+        })();
 
         const gridTemplateColumns = (() => {
             switch (nature) {
@@ -1595,7 +1633,25 @@ const TravelExpenseGrid = ({
                         )}
                     </div>
                     {!isLocked && (
-                        <div style={{ display: 'flex', gap: '10px' }}>
+                        <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                            {nature === 'Local Travel' && (
+                                <div className="date-filter-group" style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'white', padding: '4px 12px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                                    <Calendar size={14} style={{ color: '#4f46e5' }} />
+                                    <select 
+                                        value={dateFilter} 
+                                        onChange={e => {
+                                            if (onFilterChange) onFilterChange(e.target.value);
+                                            else setDateFilter && setDateFilter(e.target.value);
+                                        }}
+                                        style={{ border: 'none', background: 'transparent', fontSize: '0.75rem', fontWeight: 700, color: '#1e293b', cursor: 'pointer', outline: 'none' }}
+                                    >
+                                        <option value="Today">Today</option>
+                                        <option value="Last 7 Days">Last 7 Days</option>
+                                        <option value="Last 30 Days">Last 30 Days</option>
+                                        <option value="All">All Records</option>
+                                    </select>
+                                </div>
+                            )}
                             {showBulkUpload && nature === 'Local Travel' && (
                                 <button className="add-cat-row-btn" style={{ background: '#10b981', color: 'white', borderColor: '#10b981' }} onClick={() => setBulkModal(prev => ({ ...prev, visible: true, activeTab: 'history', hideUpload: true }))}>
                                     <RotateCcw size={14} />
@@ -1689,20 +1745,20 @@ const TravelExpenseGrid = ({
                                                                             <input type="text" placeholder="Start location / Origin" value={row.details.origin || ''} onChange={e => updateDetails(row.id, 'origin', e.target.value)} className="cat-input" disabled={isLocked} />
                                                                         </div>
                                                                         <div className="input-with-label-mini">
-                                                                            <label>Odo Reading</label>
-                                                                            <input type="number" placeholder="0" value={row.details.odoStart || ''} onChange={e => updateDetails(row.id, 'odoStart', e.target.value)} className="cat-input" disabled={isLocked} />
-                                                                        </div>
-                                                                        <div className="input-with-label-mini">
-                                                                            <label>Odo Photo</label>
-                                                                            {!isLocked ? (
-                                                                                <button type="button" className="odo-capture-btn" style={{ width: '100%', justifyContent: 'center' }} onClick={() => handleOdoCapture(row.id, 'odoStart')}>
-                                                                                    {row.details.odoStartImg ? <Check size={13} style={{ color: '#16a34a' }} /> : <Camera size={13} />}
-                                                                                    <span>{row.details.odoStartImg ? 'Captured' : 'Odo Pic'}</span>
-                                                                                </button>
-                                                                            ) : (
-                                                                                <div style={{ fontSize: '0.7rem', color: row.details.odoStartImg ? '#16a34a' : '#94a3b8' }}>{row.details.odoStartImg ? '✓ Captured' : 'N/A'}</div>
-                                                                            )}
-                                                                        </div>
+                                                                             <label>Odo Reading</label>
+                                                                             <input type="number" placeholder="0" value={row.details.odoStart || ''} onChange={e => updateDetails(row.id, 'odoStart', e.target.value)} className="cat-input" disabled={isLocked || row.date !== todayStr} />
+                                                                         </div>
+                                                                         <div className="input-with-label-mini">
+                                                                             <label>Odo Photo</label>
+                                                                             {(!isLocked && row.date === todayStr) ? (
+                                                                                 <button type="button" className="odo-capture-btn" style={{ width: '100%', justifyContent: 'center' }} onClick={() => handleOdoCapture(row.id, 'odoStart')}>
+                                                                                     {row.details.odoStartImg ? <Check size={13} style={{ color: '#16a34a' }} /> : <Camera size={13} />}
+                                                                                     <span>{row.details.odoStartImg ? 'Captured' : 'Odo Pic'}</span>
+                                                                                 </button>
+                                                                             ) : (
+                                                                                 <div style={{ fontSize: '0.7rem', color: row.details.odoStartImg ? '#16a34a' : '#94a3b8' }}>{row.details.odoStartImg ? '✓ Captured' : 'N/A'}</div>
+                                                                             )}
+                                                                         </div>
                                                                     </div>
                                                                 </div>
 
@@ -1722,21 +1778,21 @@ const TravelExpenseGrid = ({
                                                                             <label>Location</label>
                                                                             <input type="text" placeholder="End location / Destination" value={row.details.destination || ''} onChange={e => updateDetails(row.id, 'destination', e.target.value)} className="cat-input" disabled={isLocked} />
                                                                         </div>
-                                                                        <div className="input-with-label-mini">
-                                                                            <label>Odo Reading</label>
-                                                                            <input type="number" placeholder="0" value={row.details.odoEnd || ''} onChange={e => updateDetails(row.id, 'odoEnd', e.target.value)} className="cat-input" disabled={isLocked} />
-                                                                        </div>
-                                                                        <div className="input-with-label-mini">
-                                                                            <label>Odo Photo</label>
-                                                                            {!isLocked ? (
-                                                                                <button type="button" className="odo-capture-btn" style={{ width: '100%', justifyContent: 'center' }} onClick={() => handleOdoCapture(row.id, 'odoEnd')}>
-                                                                                    {row.details.odoEndImg ? <Check size={13} style={{ color: '#16a34a' }} /> : <Camera size={13} />}
-                                                                                    <span>{row.details.odoEndImg ? 'Captured' : 'Odo Pic'}</span>
-                                                                                </button>
-                                                                            ) : (
-                                                                                <div style={{ fontSize: '0.7rem', color: row.details.odoEndImg ? '#16a34a' : '#94a3b8' }}>{row.details.odoEndImg ? '✓ Captured' : 'N/A'}</div>
-                                                                            )}
-                                                                        </div>
+                                                                         <div className="input-with-label-mini">
+                                                                             <label>Odo Reading</label>
+                                                                             <input type="number" placeholder="0" value={row.details.odoEnd || ''} onChange={e => updateDetails(row.id, 'odoEnd', e.target.value)} className="cat-input" disabled={isLocked || row.date !== todayStr} />
+                                                                         </div>
+                                                                         <div className="input-with-label-mini">
+                                                                             <label>Odo Photo</label>
+                                                                             {(!isLocked && row.date === todayStr) ? (
+                                                                                 <button type="button" className="odo-capture-btn" style={{ width: '100%', justifyContent: 'center' }} onClick={() => handleOdoCapture(row.id, 'odoEnd')}>
+                                                                                     {row.details.odoEndImg ? <Check size={13} style={{ color: '#16a34a' }} /> : <Camera size={13} />}
+                                                                                     <span>{row.details.odoEndImg ? 'Captured' : 'Odo Pic'}</span>
+                                                                                 </button>
+                                                                             ) : (
+                                                                                 <div style={{ fontSize: '0.7rem', color: row.details.odoEndImg ? '#16a34a' : '#94a3b8' }}>{row.details.odoEndImg ? '✓ Captured' : 'N/A'}</div>
+                                                                             )}
+                                                                         </div>
                                                                     </div>
                                                                 </div>
 
@@ -2292,34 +2348,36 @@ const TravelExpenseGrid = ({
                                                                                 );
                                                                             })()}
                                                                             <div className="odo-row mb-2">
-                                                                                <span className="odo-label">Start</span>
-                                                                                <div style={{ display: 'flex', alignItems: 'center', position: 'relative', width: '100%' }}>
-                                                                                    <input
-                                                                                        type="number"
-                                                                                        placeholder="0"
-                                                                                        value={row.details.odoStart || ''}
-                                                                                        onChange={e => updateDetails(row.id, 'odoStart', e.target.value)}
-                                                                                        className={errors[row.id]?.odoStart ? 'error' : ''}
-                                                                                        style={{ paddingRight: '50px', width: '100%' }}
-                                                                                    />
-                                                                                    <button type="button" className="odo-cam-btn" onClick={() => handleOdoCapture(row.id, 'odoStart')}>
-                                                                                        {row.details.odoStartImg ? <Check size={12} className="text-success" /> : <Camera size={12} />}
-                                                                                    </button>
-                                                                                </div>
-                                                                                <span className="odo-label">End</span>
-                                                                                <div style={{ display: 'flex', alignItems: 'center', position: 'relative', width: '100%' }}>
-                                                                                    <input
-                                                                                        type="number"
-                                                                                        placeholder="0"
-                                                                                        value={row.details.odoEnd || ''}
-                                                                                        onChange={e => updateDetails(row.id, 'odoEnd', e.target.value)}
-                                                                                        className={errors[row.id]?.odoEnd ? 'error' : ''}
-                                                                                        style={{ paddingRight: '50px', width: '100%' }}
-                                                                                    />
-                                                                                    <button type="button" className="odo-cam-btn" onClick={() => handleOdoCapture(row.id, 'odoEnd')}>
-                                                                                        {row.details.odoEndImg ? <Check size={12} className="text-success" /> : <Camera size={12} />}
-                                                                                    </button>
-                                                                                </div>
+                                                                                 <span className="odo-label">Start</span>
+                                                                                 <div style={{ display: 'flex', alignItems: 'center', position: 'relative', width: '100%' }}>
+                                                                                     <input
+                                                                                         type="number"
+                                                                                         placeholder="0"
+                                                                                         value={row.details.odoStart || ''}
+                                                                                         onChange={e => updateDetails(row.id, 'odoStart', e.target.value)}
+                                                                                         className={errors[row.id]?.odoStart ? 'error' : ''}
+                                                                                         style={{ paddingRight: '50px', width: '100%' }}
+                                                                                         disabled={isLocked || row.date !== todayStr}
+                                                                                     />
+                                                                                     <button type="button" className="odo-cam-btn" onClick={() => handleOdoCapture(row.id, 'odoStart')} disabled={isLocked || row.date !== todayStr}>
+                                                                                         {row.details.odoStartImg ? <Check size={12} className="text-success" /> : <Camera size={12} />}
+                                                                                     </button>
+                                                                                 </div>
+                                                                                 <span className="odo-label">End</span>
+                                                                                 <div style={{ display: 'flex', alignItems: 'center', position: 'relative', width: '100%' }}>
+                                                                                     <input
+                                                                                         type="number"
+                                                                                         placeholder="0"
+                                                                                         value={row.details.odoEnd || ''}
+                                                                                         onChange={e => updateDetails(row.id, 'odoEnd', e.target.value)}
+                                                                                         className={errors[row.id]?.odoEnd ? 'error' : ''}
+                                                                                         style={{ paddingRight: '50px', width: '100%' }}
+                                                                                         disabled={isLocked || row.date !== todayStr}
+                                                                                     />
+                                                                                     <button type="button" className="odo-cam-btn" onClick={() => handleOdoCapture(row.id, 'odoEnd')} disabled={isLocked || row.date !== todayStr}>
+                                                                                         {row.details.odoEndImg ? <Check size={12} className="text-success" /> : <Camera size={12} />}
+                                                                                     </button>
+                                                                                 </div>
                                                                             </div>
                                                                         </>
                                                                     )}
@@ -2769,11 +2827,11 @@ const TravelExpenseGrid = ({
 
                                         return (
                                             <React.Fragment key={r.id}>
-                                                <tr className={r.details.travelStatus && r.details.travelStatus !== 'Completed' ? `status-row-${r.details.travelStatus.toLowerCase().replace(' ', '-')}` : ''}>
+                                                <tr className={r.details?.travelStatus && r.details?.travelStatus !== 'Completed' ? `status-row-${r.details.travelStatus.toLowerCase().replace(' ', '-')}` : ''}>
                                                     <td className="rev-cat-cell">
                                                         <div className="rev-cat-icon-label">
-                                                            {categoryOpt?.icon}
-                                                            <span>{r.nature}</span>
+                                                            {categoryOpt?.icon || <IndianRupee size={14} />}
+                                                            <span>{r.nature || 'Unknown'}</span>
                                                         </div>
                                                     </td>
                                                     <td className="mono" style={{ fontSize: '0.75rem' }}>{r.date}</td>
@@ -2781,36 +2839,39 @@ const TravelExpenseGrid = ({
                                                         <div className="rev-main-info">
                                                             {r.nature === 'Travel' && (
                                                                 <>
-                                                                    <strong>{r.details.mode || 'Travel'}</strong>
-                                                                    <span>{r.details.origin} → {r.details.destination}</span>
+                                                                    <strong>{r.details?.mode || 'Travel'}</strong>
+                                                                    <span>{r.details?.origin || ''} → {r.details?.destination || ''}</span>
                                                                 </>
                                                             )}
                                                             {r.nature === 'Local Travel' && (
                                                                 <>
-                                                                    <strong>{r.details.mode || 'Local'} - {r.details.subType || 'No Type'}</strong>
-                                                                    <span>{r.details.origin || r.details.fromLocation || 'Start'} → {r.details.destination || r.details.toLocation || 'End'}</span>
+                                                                    <strong>{r.details?.mode || 'Local'} - {r.details?.subType || 'No Type'}</strong>
+                                                                    <span>{(r.details?.origin || r.details?.fromLocation) || 'Starting point'} → {(r.details?.destination || r.details?.toLocation) || 'Ending point'}</span>
                                                                 </>
                                                             )}
                                                             {r.nature === 'Food' && (
                                                                 <>
-                                                                    <strong>{r.details.mealType || 'Meal'}</strong>
-                                                                    <span>{r.details.restaurant || 'Refreshments'}</span>
+                                                                    <strong>{r.details?.mealType || 'Meal'}</strong>
+                                                                    <span>{r.details?.restaurant || 'Refreshments'}</span>
                                                                 </>
                                                             )}
                                                             {r.nature === 'Accommodation' && (
                                                                 <>
-                                                                    <strong>{r.details.hotelName || 'Stay'}</strong>
-                                                                    <span>{r.details.city} ({r.details.nights} Nights)</span>
+                                                                    <strong>{r.details?.hotelName || 'Stay'}</strong>
+                                                                    <span>{r.details?.city || 'City not specified'} ({r.details?.nights || 0} Nights)</span>
                                                                 </>
                                                             )}
                                                             {r.nature === 'Incidental' && (
                                                                 <>
-                                                                    <strong>{r.details.incidentalType || 'Misc'}</strong>
-                                                                    <span>{r.details.notes || 'No notes'}</span>
+                                                                    <strong>{r.details?.incidentalType || 'Misc'}</strong>
+                                                                    <span>{r.details?.notes || 'No description'}</span>
                                                                 </>
                                                             )}
+                                                            {(!r.nature || !['Travel', 'Local Travel', 'Food', 'Accommodation', 'Incidental'].includes(r.nature)) && (
+                                                                <span>{r.remarks || 'No details'}</span>
+                                                            )}
                                                         </div>
-                                                        {r.isSaved && r.details.travelStatus && r.details.travelStatus !== 'Completed' && (
+                                                        {r.isSaved && r.details?.travelStatus && r.details?.travelStatus !== 'Completed' && (
                                                             <div className={`rev-status-tag ${r.details.travelStatus.toLowerCase().replace(' ', '-')}`}>
                                                                 {r.details.travelStatus}
                                                             </div>
@@ -2845,22 +2906,22 @@ const TravelExpenseGrid = ({
                                                         ) : <span className="no-bill-dash">—</span>}
                                                     </td>
                                                     <td className="text-center">
-                                                        {(r.isSaved || r.details.travelStatus !== 'Completed') ? (
+                                                        {(r.isSaved || r.details?.travelStatus !== 'Completed') ? (
                                                             <div className="status-cell-wrapper">
                                                                 <select
-                                                                    className={`rev-status-select ${r.details.travelStatus && r.details.travelStatus !== 'Completed' ? 'status-' + r.details.travelStatus.toLowerCase().replace(' ', '-') : ''}`}
-                                                                    value={r.details.travelStatus || 'Completed'}
+                                                                    className={`rev-status-select ${r.details?.travelStatus && r.details?.travelStatus !== 'Completed' ? 'status-' + r.details.travelStatus.toLowerCase().replace(' ', '-') : ''}`}
+                                                                    value={r.details?.travelStatus || 'Completed'}
                                                                     onChange={e => handleReviewStatusChange(r.id, e.target.value)}
-                                                                    disabled={(r.nature === 'Travel' || r.nature === 'Local Travel') && r.details.bookedBy === 'Company Booked'}
-                                                                    title={(r.nature === 'Travel' || r.nature === 'Local Travel') && r.details.bookedBy === 'Company Booked' ? "This ticket is booked and paid by the company. Please contact the Travel Desk for any changes." : ""}
+                                                                    disabled={(r.nature === 'Travel' || r.nature === 'Local Travel') && r.details?.bookedBy === 'Company Booked'}
+                                                                    title={(r.nature === 'Travel' || r.nature === 'Local Travel') && r.details?.bookedBy === 'Company Booked' ? "This ticket is booked and paid by the company. Please contact the Travel Desk for any changes." : ""}
                                                                 >
                                                                     {availableStatuses.map(s => {
-                                                                        const isOwnVehicle = r.details.subType === 'Own Car' || r.details.subType === 'Own Bike';
-                                                                        const isDisabled = (isOwnVehicle && (s === 'Cancelled' || s === 'No-Show')) || ((r.nature === 'Travel' || r.nature === 'Local Travel') && r.details.bookedBy === 'Company Booked' && s !== 'Completed');
+                                                                        const isOwnVehicle = r.details?.subType === 'Own Car' || r.details?.subType === 'Own Bike';
+                                                                        const isDisabled = (isOwnVehicle && (s === 'Cancelled' || s === 'No-Show')) || ((r.nature === 'Travel' || r.nature === 'Local Travel') && r.details?.bookedBy === 'Company Booked' && s !== 'Completed');
                                                                         return <option key={s} value={s} disabled={isDisabled}>{s}</option>;
                                                                     })}
                                                                 </select>
-                                                                {(r.nature === 'Travel' || r.nature === 'Local Travel') && r.details.bookedBy === 'Company Booked' && (
+                                                                {(r.nature === 'Travel' || r.nature === 'Local Travel') && r.details?.bookedBy === 'Company Booked' && (
                                                                     <div className="company-booked-msg" style={{ fontSize: '0.6rem', color: '#64748b', marginTop: '2px', fontStyle: 'italic' }}>
                                                                         Contact Travel Desk for changes
                                                                     </div>
@@ -3075,11 +3136,11 @@ const TravelExpenseGrid = ({
             </div>
 
             <div className="categorized-sections-grid single-mode">
-                {activeCategory === 'Travel' && renderCategoryTable('Travel', 'Long Distance Travel', <Plane size={18} />)}
-                {activeCategory === 'Local Travel' && renderCategoryTable('Local Travel', 'Local Conveyance', <Car size={18} />)}
-                {activeCategory === 'Food' && renderCategoryTable('Food', 'Food & Refreshments', <Coffee size={18} />)}
-                {activeCategory === 'Accommodation' && renderCategoryTable('Accommodation', 'Stay & Lodging', <Hotel size={18} />)}
-                {activeCategory === 'Incidental' && renderCategoryTable('Incidental', 'Incidental Expenses', <Receipt size={18} />)}
+                {activeCategory === 'Travel' && <CategoryTable nature="Travel" title="Long Distance Travel" icon={<Plane size={18} />} />}
+                {activeCategory === 'Local Travel' && <CategoryTable nature="Local Travel" title="Local Conveyance" icon={<Car size={18} />} />}
+                {activeCategory === 'Food' && <CategoryTable nature="Food" title="Food & Refreshments" icon={<Coffee size={18} />} />}
+                {activeCategory === 'Accommodation' && <CategoryTable nature="Accommodation" title="Stay & Lodging" icon={<Hotel size={18} />} />}
+                {activeCategory === 'Incidental' && <CategoryTable nature="Incidental" title="Incidental Expenses" icon={<Receipt size={18} />} />}
                 {activeCategory === 'Review' && renderReviewSummary()}
             </div>
 
@@ -3250,8 +3311,8 @@ const TravelExpenseGrid = ({
                                 <div className="bulk-history-view">
                                     {(() => {
                                         const displayHistory = bulkModal.hideUpload
-                                            ? bulkHistory.filter(batch => 
-                                                batch.status !== 'Resolved' && 
+                                            ? bulkHistory.filter(batch =>
+                                                batch.status !== 'Resolved' &&
                                                 (batch.data_json || []).some(r => r._status === 'Rejected')
                                             )
                                             : bulkHistory;
@@ -3401,8 +3462,8 @@ const TravelExpenseGrid = ({
                         </div>
                         <div className="modal-actions" style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', padding: '20px', borderTop: '1px solid #e2e8f0' }}>
                             <button className="btn-secondary" onClick={() => setResubmitModal({ visible: false, batchId: null, rows: [], submitting: false })}>Cancel</button>
-                            <button 
-                                className={`btn-primary ${resubmitModal.submitting ? 'loading' : ''}`} 
+                            <button
+                                className={`btn-primary ${resubmitModal.submitting ? 'loading' : ''}`}
                                 onClick={handleResubmit}
                                 disabled={resubmitModal.submitting}
                                 style={{ background: 'var(--magenta)', color: 'white', padding: '10px 24px', borderRadius: '6px', border: 'none', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '8px' }}

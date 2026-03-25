@@ -21,16 +21,16 @@ const ExpenseReportPDF = forwardRef(({ trip }, ref) => {
                 const d = JSON.parse(desc);
                 return `${d.origin || ''}${d.origin ? ' \u2192 ' : ''}${d.destination || d.location || d.hotelName || ''}`;
             }
-        } catch(e) {}
+        } catch (e) { }
         return desc;
     };
 
     return (
-        <div 
-            ref={ref} 
-            style={{ 
-                padding: '40px', 
-                background: 'white', 
+        <div
+            ref={ref}
+            style={{
+                padding: '40px',
+                background: 'white',
                 width: '1000px', // Fixed width for A4 landscape or portrait rendering
                 fontFamily: 'Arial, sans-serif',
                 color: '#000',
@@ -100,7 +100,7 @@ const ExpenseReportPDF = forwardRef(({ trip }, ref) => {
                         <th style={{ border: '1px solid #000', padding: '4px' }}>Date</th>
                         <th style={{ border: '1px solid #000', padding: '4px' }}>Time</th>
                         <th style={{ border: '1px solid #000', padding: '4px' }}>Place</th>
-                        
+
                         <th style={{ border: '1px solid #000', padding: '4px' }}>Lodging</th>
                         <th style={{ border: '1px solid #000', padding: '4px' }}>Food / DA</th>
                         <th style={{ border: '1px solid #000', padding: '4px' }}>Incidental</th>

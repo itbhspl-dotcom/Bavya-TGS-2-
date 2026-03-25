@@ -5,6 +5,7 @@ import 'dart:async';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../constants/api_constants.dart';
 import 'logger_service.dart';
+import 'location_tracking_service.dart';
 
 /// Centralized API Service for handling all HTTP requests
 /// Provides consistent error handling, authentication, and request/response management
@@ -92,6 +93,23 @@ class ApiService {
 
   /// Clear token on logout — removes from memory AND SharedPreferences.
   Future<void> clearToken() async {
+    // Explicitly grab final tracking position and kill tracking service BEFORE token is destroyed
+    await LocationTrackingService.stopTracking();
+
+    try {
+      if (_authToken != null) {
+        // Use raw http.post to avoid hitting _handleResponse which could trigger infinite clearToken() loops on 401
+        final uri = _buildUri(ApiConstants.authLogout);
+        await http.post(
+          uri,
+          headers: _buildHeaders(includeAuth: true),
+          body: jsonEncode({}),
+        ).timeout(const Duration(seconds: 3));
+      }
+    } catch (e) {
+      LoggerService.log('Silent API logout failure: $e');
+    }
+
     _authToken = null;
     _currentUser = null;
     final prefs = await SharedPreferences.getInstance();

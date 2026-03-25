@@ -58,6 +58,7 @@ const TravelStory = () => {
     const [showWalletModal, setShowWalletModal] = useState(false);
     const [isActionLoading, setIsActionLoading] = useState(false);
     const [auditRemarks, setAuditRemarks] = useState({});
+    const [dateFilter, setDateFilter] = useState('Last 7 Days');
 
     // Luggage popup state
     const [showLuggagePopup, setShowLuggagePopup] = useState(false);
@@ -96,7 +97,7 @@ const TravelStory = () => {
 
     useEffect(() => {
         fetchTravelStory();
-    }, [id]);
+    }, [id, dateFilter]);
 
     const getFullUrl = (path) => {
         if (!path) return '';
@@ -115,7 +116,28 @@ const TravelStory = () => {
         setIsLoading(true);
         try {
             const decodedId = decodeId(id);
-            const response = await api.get(`/api/trips/${decodedId}/`);
+            const endpoint = decodedId.toString().startsWith('ITS-') ? 'travels' : 'trips';
+            
+            // Build query params for filtering
+            const params = {};
+            if (dateFilter !== 'All') {
+                const now = new Date();
+                const limit = new Date();
+                if (dateFilter === 'Today') {
+                    params.from_date = now.toISOString().split('T')[0];
+                    params.to_date = now.toISOString().split('T')[0];
+                } else if (dateFilter === 'Last 7 Days') {
+                    limit.setDate(limit.getDate() - 7);
+                    params.from_date = limit.toISOString().split('T')[0];
+                    params.to_date = now.toISOString().split('T')[0];
+                } else if (dateFilter === 'Last 30 Days') {
+                    limit.setDate(limit.getDate() - 30);
+                    params.from_date = limit.toISOString().split('T')[0];
+                    params.to_date = now.toISOString().split('T')[0];
+                }
+            }
+
+            const response = await api.get(`/api/${endpoint}/${decodedId}/`, { params });
             setTravel(response.data);
         } catch (error) {
             console.error("Failed to fetch travel story:", error);
@@ -204,7 +226,8 @@ const TravelStory = () => {
         showToast(`Generating ${format.toUpperCase()} statement...`, "info");
 
         try {
-            const response = await api.get(`/api/trips/${travel.trip_id}/export/${format}/`, {
+            const endpoint = travel.trip_id?.startsWith('ITS-') ? 'travels' : 'trips';
+            const response = await api.get(`/api/${endpoint}/${travel.trip_id}/export/${format}/`, {
                 responseType: 'blob'
             });
 
@@ -715,6 +738,8 @@ const TravelStory = () => {
                             tripStatus={travel.status}
                             claimStatus={travel.claim?.status}
                             allowedNatures={['Local Travel']}
+                            dateFilter={dateFilter}
+                            onFilterChange={setDateFilter}
                             // only show bulk button for full travel requests (TRP-)
                             showBulkUpload={true}
                             onJobReportClick={() => setShowJobReportModal(true)}

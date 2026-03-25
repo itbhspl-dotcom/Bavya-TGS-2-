@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'trip_details_screen.dart';
+import 'trip_timeline_screen.dart';
+import 'local_travel_timeline_screen.dart';
 import 'travel_story_screen.dart';
 import 'trip_story_screen.dart';
 import 'trip_summary_screen.dart';
@@ -976,8 +977,9 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
                                   () => Navigator.push(
                                     context,
                                     MaterialPageRoute(
-                                      builder: (_) =>
-                                          TripDetailsScreen(tripId: t.id),
+                                      builder: (_) => t.considerAsLocal
+                                          ? LocalTravelTimelineScreen(tripId: t.id)
+                                          : TripTimelineScreen(tripId: t.id),
                                     ),
                                   ),
                                 ),

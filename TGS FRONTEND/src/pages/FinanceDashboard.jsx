@@ -217,28 +217,28 @@ const FinanceDashboard = () => {
 
                 {/* Status Tabs */}
                 <div className="fims-tabs">
-                    <button 
+                    <button
                         className={`fims-tab ${activeTab === 'pending' ? 'active' : ''}`}
                         onClick={() => setActiveTab('pending')}
                     >
                         <Clock size={16} />
                         Action Required
                     </button>
-                    <button 
+                    <button
                         className={`fims-tab ${activeTab === 'processing' ? 'active' : ''}`}
                         onClick={() => setActiveTab('processing')}
                     >
                         <Zap size={16} />
                         Under Process
                     </button>
-                    <button 
+                    <button
                         className={`fims-tab ${activeTab === 'completed' ? 'active' : ''}`}
                         onClick={() => setActiveTab('completed')}
                     >
                         <CheckCircle size={16} />
                         Transfer Completed
                     </button>
-                    <button 
+                    <button
                         className={`fims-tab ${activeTab === 'rejected' ? 'active' : ''}`}
                         onClick={() => setActiveTab('rejected')}
                     >
@@ -315,10 +315,10 @@ const FinanceDashboard = () => {
                                         <div className="empty-state-fims">
                                             <AlertCircle size={32} opacity={0.3} style={{ marginBottom: '10px' }} />
                                             <p>
-                                                {activeTab === 'pending' ? 'No pending financial actions found in queue.' : 
-                                                 activeTab === 'processing' ? 'No transactions are currently under audit process.' :
-                                                 activeTab === 'completed' ? 'No completed fund transfers found.' :
-                                                 'No flagged or rejected requests found at this time.'}
+                                                {activeTab === 'pending' ? 'No pending financial actions found in queue.' :
+                                                    activeTab === 'processing' ? 'No transactions are currently under audit process.' :
+                                                        activeTab === 'completed' ? 'No completed fund transfers found.' :
+                                                            'No flagged or rejected requests found at this time.'}
                                             </p>
                                         </div>
                                     </td>
