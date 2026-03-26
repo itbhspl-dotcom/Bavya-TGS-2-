@@ -58,7 +58,24 @@ const FALLBACK_BUS_SEAT_TYPES = ['Sleeper', 'Semi Sleeper', 'AC', 'Non-AC', 'Vol
 const FALLBACK_INCIDENTAL_TYPES = ['Parking Charges', 'Toll Charges', 'Fuel (Own Vehicle)', 'Luggage Charges', 'Porter Charges', 'Internet / WiFi', 'Others'];
 
 const TRAVEL_STATUSES = ['Completed', 'Cancelled', 'Rescheduled'];
+const CAB_VEHICLE_TYPES = ['Sedan', 'SUV', 'MUV', 'Hatchback'];
 const LOCAL_TRAVEL_STATUSES = ['Completed', 'Cancelled', 'No-Show'];
+
+const HARDCODED_AIRLINES = ['IndiGo', 'Air India', 'Vistara', 'SpiceJet', 'Akasa Air', 'Air India Express'];
+const HARDCODED_BUS_OPERATORS = ['RedBus', 'AbhiBus', 'SRS Travels', 'KPN Travels', 'VRL Travels', 'Orange Travels'];
+const HARDCODED_TRAIN_PROVIDERS = ['IRCTC', 'Indian Railways'];
+const HARDCODED_LOCATIONS = [
+    { id: 1, name: 'Mumbai', code: 'BOM', cluster_type: 'Metro City' },
+    { id: 2, name: 'Delhi', code: 'DEL', cluster_type: 'Metro City' },
+    { id: 3, name: 'Bangalore', code: 'BLR', cluster_type: 'Metro City' },
+    { id: 4, name: 'Hyderabad', code: 'HYD', cluster_type: 'Metro City' },
+    { id: 5, name: 'Chennai', code: 'MAA', cluster_type: 'Metro City' },
+    { id: 6, name: 'Kolkata', code: 'CCU', cluster_type: 'Metro City' },
+    { id: 7, name: 'Pune', code: 'PNQ', cluster_type: 'City' },
+    { id: 8, name: 'Ahmedabad', code: 'AMD', cluster_type: 'City' },
+    { id: 9, name: 'Jaipur', code: 'JAI', cluster_type: 'City' },
+    { id: 10, name: 'Lucknow', code: 'LKO', cluster_type: 'City' }
+];
 
 const MOCK_DATA = [
     {
@@ -256,14 +273,14 @@ const TripExpenseGrid = ({
     hasAdditionalLuggage = false
 }) => {
     // Master data states
-    const [travelModes, setTravelModes] = useState(FALLBACK_TRAVEL_MODES);
-    const [bookedByOptions, setBookedByOptions] = useState(FALLBACK_BOOKED_BY_OPTIONS);
+    const [travelModes, setTravelModes] = useState([]);
+    const [bookedByOptions, setBookedByOptions] = useState([]);
     const [ticketStatusOptions, setTicketStatusOptions] = useState([]);
     const [quotaTypeOptions, setQuotaTypeOptions] = useState([]);
-    const [flightClasses, setFlightClasses] = useState(FALLBACK_FLIGHT_CLASSES);
-    const [trainClasses, setTrainClasses] = useState(FALLBACK_TRAIN_CLASSES);
-    const [busSeatTypes, setBusSeatTypes] = useState(FALLBACK_BUS_SEAT_TYPES);
-    const [intercityCabVehicleTypes, setIntercityCabVehicleTypes] = useState(['Sedan', 'SUV', 'MUV', 'Hatchback']);
+    const [flightClasses, setFlightClasses] = useState([]);
+    const [trainClasses, setTrainClasses] = useState([]);
+    const [busSeatTypes, setBusSeatTypes] = useState([]);
+    // Replaced with Constant CAB_VEHICLE_TYPES
     const [airlines, setAirlines] = useState([]);
     const [busOperators, setBusOperators] = useState([]);
     const [travelProviders, setTravelProviders] = useState([]);
@@ -283,26 +300,26 @@ const TripExpenseGrid = ({
     const [generalIncidentalTypes, setGeneralIncidentalTypes] = useState([]);
 
     // Local Masters
-    const [localTravelModes, setLocalTravelModes] = useState(FALLBACK_LOCAL_TRAVEL_MODES);
-    const [localCarSubTypes, setLocalCarSubTypes] = useState(FALLBACK_LOCAL_CAR_SUBTYPES);
-    const [localBikeSubTypes, setLocalBikeSubTypes] = useState(FALLBACK_LOCAL_BIKE_SUBTYPES);
+    const [localTravelModes, setLocalTravelModes] = useState([]);
+    const [localCarSubTypes, setLocalCarSubTypes] = useState([]);
+    const [localBikeSubTypes, setLocalBikeSubTypes] = useState([]);
     const [localAutoSubTypes, setLocalAutoSubTypes] = useState([]);
     const [localProviders, setLocalProviders] = useState([]);
 
     // Stay Masters
-    const [stayTypes, setStayTypes] = useState(FALLBACK_ACCOM_TYPES);
-    const [roomTypes, setRoomTypes] = useState(FALLBACK_ROOM_TYPES);
+    const [stayTypes, setStayTypes] = useState([]);
+    const [roomTypes, setRoomTypes] = useState([]);
     const [stayBookingTypes, setStayBookingTypes] = useState([]);
     const [stayBookingSources, setStayBookingSources] = useState([]);
 
     // Food Masters
-    const [mealCategories, setMealCategories] = useState(['Self Meal', 'Working Meal', 'Client Hosted']);
+    const [mealCategories, setMealCategories] = useState([]);
     const [mealTypes, setMealTypes] = useState([]);
     const [mealSources, setMealSources] = useState([]);
     const [mealProviders, setMealProviders] = useState([]);
 
     // Incidental Masters
-    const [incidentalTypes, setIncidentalTypes] = useState(FALLBACK_INCIDENTAL_TYPES);
+    const [incidentalTypes, setIncidentalTypes] = useState([]);
 
     const [rows, setRows] = useState([]);
     const [locationsPool, setLocationsPool] = useState([]);
@@ -336,189 +353,57 @@ const TripExpenseGrid = ({
     const [bulkModal, setBulkModal] = useState({ visible: false, file: null, uploading: false });
 
     useEffect(() => {
-        const fetchMasters = async () => {
-            try {
-                const [
-                    modesRes, bookedByRes, fClassesRes, tClassesRes, busTypesRes,
-                    cabVehiclesRes, airlinesRes, busOpsRes, travProvRes,
-                    locModesRes, carSubRes, bikeSubRes, autoSubRes, locProvRes,
-                    stayTypeRes, roomTypeRes,
-                    mealCatRes, mealTypeRes,
-                    incTypeRes,
-                    trainProvRes, busProvRes, cabProvRes, flightProvRes,
-                    ticketStatusRes, quotaTypeRes
-                ] = await Promise.all([
-                    api.get('/api/travel-mode-masters/'),
-                    api.get('/api/booking-type-masters/'),
-                    api.get('/api/travel-class-masters/?is_flight=true'),
-                    api.get('/api/travel-class-masters/?is_train=true'),
-                    api.get('/api/travel-class-masters/?is_bus=true'),
-                    api.get('/api/travel-vehicle-masters/?is_intercity_cab=true'),
-                    api.get('/api/travel-operator-masters/?is_flight=true'),
-                    api.get('/api/travel-operator-masters/?is_bus=true'),
-                    api.get('/api/travel-provider-masters/'),
-                    api.get('/api/local-travel-mode-masters/'),
-                    api.get('/api/local-subtype-masters/?is_car=true'),
-                    api.get('/api/local-subtype-masters/?is_bike=true'),
-                    api.get('/api/local-subtype-masters/?is_auto=true'),
-                    api.get('/api/local-provider-masters/'),
-                    api.get('/api/stay-type-masters/'),
-                    api.get('/api/room-type-masters/'),
-                    api.get('/api/meal-category-masters/'),
-                    api.get('/api/meal-type-masters/'),
-                    api.get('/api/incidental-type-masters/'),
-                    api.get('/api/travel-provider-masters/?is_train=true'),
-                    api.get('/api/travel-provider-masters/?is_bus=true'),
-                    api.get('/api/travel-provider-masters/?is_intercity_cab=true'),
-                    api.get('/api/travel-provider-masters/?is_flight=true'),
-                    api.get('/api/ticket-status-masters/'),
-                    api.get('/api/quota-type-masters/')
-                ]);
+        // Hardcoded Master Data Setup
+        setTravelModes(FALLBACK_TRAVEL_MODES);
+        setBookedByOptions(FALLBACK_BOOKED_BY_OPTIONS);
+        setFlightClasses(FALLBACK_FLIGHT_CLASSES);
+        setTrainClasses(FALLBACK_TRAIN_CLASSES);
+        setBusSeatTypes(FALLBACK_BUS_SEAT_TYPES);
+        setAirlines(HARDCODED_AIRLINES);
+        setBusOperators(HARDCODED_BUS_OPERATORS);
+        setTrainProviders(HARDCODED_TRAIN_PROVIDERS);
+        setTravelProviders(['Self', 'Online Portal', 'Corporate Agent']);
+        setFlightProviders(HARDCODED_AIRLINES);
+        setBusProviders(HARDCODED_BUS_OPERATORS);
+        setCabProviders(['Uber', 'Ola', 'Meru', 'Local Agency']);
+        
+        setTicketStatusOptions([
+            { id: 1, status_name: 'Confirmed', is_flight: true, is_train: true, is_bus: true, is_intercity_cab: true },
+            { id: 2, status_name: 'Waitlisted', is_flight: false, is_train: true, is_bus: true, is_intercity_cab: false },
+            { id: 3, status_name: 'RAC', is_flight: false, is_train: true, is_bus: false, is_intercity_cab: false }
+        ]);
+        
+        setQuotaTypeOptions([
+            { id: 1, quota_name: 'General' },
+            { id: 2, quota_name: 'Tatkal' },
+            { id: 3, quota_name: 'Ladies' },
+            { id: 4, quota_name: 'Senior Citizen' }
+        ]);
 
-                // Populate Travel
-                if (modesRes.data.length > 0) setTravelModes(modesRes.data.filter(m => m.status).map(m => m.mode_name));
-                if (bookedByRes.data.length > 0) setBookedByOptions(bookedByRes.data.filter(m => m.status).map(m => m.booking_type));
-                if (fClassesRes.data.length > 0) setFlightClasses(fClassesRes.data.filter(m => m.status).map(m => m.class_name));
-                if (tClassesRes.data.length > 0) setTrainClasses(tClassesRes.data.filter(m => m.status).map(m => m.class_name));
-                if (busTypesRes.data.length > 0) setBusSeatTypes(busTypesRes.data.filter(m => m.status).map(m => m.class_name));
-                if (cabVehiclesRes.data.length > 0) setIntercityCabVehicleTypes(cabVehiclesRes.data.filter(m => m.status).map(m => m.vehicle_name));
-                if (airlinesRes.data.length > 0) setAirlines(airlinesRes.data.filter(m => m.status).map(m => m.operator_name));
-                if (busOpsRes.data.length > 0) setBusOperators(busOpsRes.data.filter(m => m.status).map(m => m.operator_name));
-                if (travProvRes.data.length > 0) setTravelProviders(travProvRes.data.filter(m => m.status).map(m => m.provider_name));
-                if (trainProvRes.data.length > 0) setTrainProviders(trainProvRes.data.filter(m => m.status).map(m => m.provider_name));
-                if (busProvRes.data.length > 0) setBusProviders(busProvRes.data.filter(m => m.status).map(m => m.provider_name));
-                if (cabProvRes.data.length > 0) setCabProviders(cabProvRes.data.map(m => m.provider_name));
-                if (flightProvRes.data.length > 0) setFlightProviders(flightProvRes.data.filter(m => m.status).map(m => m.provider_name));
-                setTicketStatusOptions(ticketStatusRes.data || []);
-                setQuotaTypeOptions(quotaTypeRes.data || []);
+        setLocalTravelModes(FALLBACK_LOCAL_TRAVEL_MODES);
+        setLocalCarSubTypes(FALLBACK_LOCAL_CAR_SUBTYPES);
+        setLocalBikeSubTypes(FALLBACK_LOCAL_BIKE_SUBTYPES);
+        setLocalAutoSubTypes(FALLBACK_LOCAL_PT_SUBTYPES);
+        setLocalProviders(['Ola', 'Uber', 'Rapido', 'Local Vendor']);
+        
+        setIncidentalTypes(FALLBACK_INCIDENTAL_TYPES);
+        setLocalIncidentalTypes(['Parking', 'Toll', 'Puncture', 'Others']);
+        setTravelIncidentalTypes(['Porter', 'Luggage', 'Others']);
+        setGeneralIncidentalTypes(['Internet', 'Laundry', 'Others']);
 
-                // Populate Local
-                if (locModesRes.data.length > 0) setLocalTravelModes(locModesRes.data.filter(m => m.status).map(m => m.mode_name));
-                if (carSubRes.data.length > 0) setLocalCarSubTypes(carSubRes.data.filter(m => m.status).map(m => m.sub_type));
-                if (bikeSubRes.data.length > 0) setLocalBikeSubTypes(bikeSubRes.data.filter(m => m.status).map(m => m.sub_type));
-                if (autoSubRes.data.length > 0) setLocalAutoSubTypes(autoSubRes.data.filter(m => m.status).map(m => m.sub_type));
-                if (locProvRes.data.length > 0) setLocalProviders(locProvRes.data.filter(m => m.status).map(m => m.provider_name));
-                if (incTypeRes.data.length > 0) {
-                    const allInc = incTypeRes.data.filter(m => m.status);
-                    setIncidentalTypes(allInc.map(m => m.expense_type));
-                    setLocalIncidentalTypes(allInc.filter(m => m.category === 'local_conveyance').map(m => m.expense_type));
-                    setTravelIncidentalTypes(allInc.filter(m => m.category === 'travel_incidental').map(m => m.expense_type));
-                    setGeneralIncidentalTypes(allInc.filter(m => m.category === 'general_incidental').map(m => m.expense_type));
-                }
+        setStayTypes(FALLBACK_ACCOM_TYPES);
+        setRoomTypes(FALLBACK_ROOM_TYPES);
+        setStayBookingTypes(['Corporate Guest House', 'External Hotel', 'Client Accommodation']);
+        setStayBookingSources(['Direct', 'MakeMyTrip', 'Goibibo', 'Travel Desk']);
 
-                // Populate Stay
-                if (stayTypeRes.data.length > 0) setStayTypes(stayTypeRes.data.filter(m => m.status).map(m => m.stay_type));
-                if (roomTypeRes.data.length > 0) setRoomTypes(roomTypeRes.data.filter(m => m.status).map(m => m.room_type));
+        setMealCategories(['Self Meal', 'Project Meal', 'Others']);
+        setMealTypes(['Breakfast', 'Lunch', 'Dinner', 'Refreshments']);
+        setMealSources(['Hotel', 'Restaurant', 'Office Pantry', 'Personal']);
+        setMealProviders(['Zomato', 'Swiggy', 'Local Resto']);
 
-                // Populate Food
-                
-                try {
-                    const res = await api.get('/api/geo/hierarchy/');
-                    const data = res.data.results || res.data.data || res.data;
-                    const hierarchy = Array.isArray(data) ? data : [];
+        setLocationsPool(HARDCODED_LOCATIONS);
 
-                    const result = [];
-                    const CITY_TYPES = ['city', 'metropolitan city', 'metro city', 'metro_city', 'metropolyten city'];
-                    const isCityType = (t) => CITY_TYPES.includes((t || '').toLowerCase().trim());
-
-                    const walk = (node) => {
-                        if (!node || typeof node !== 'object') return;
-
-                        ['cities', 'metro_polyten_cities'].forEach(key => {
-                            const arr = node[key];
-                            if (Array.isArray(arr)) {
-                                arr.forEach(c => {
-                                    if (c && c.name) {
-                                        result.push({ id: c.id, name: c.name, code: c.code || '', cluster_type: key === 'metro_polyten_cities' ? 'Metro City' : 'City' });
-                                    }
-                                    walk(c);
-                                });
-                            }
-                        });
-
-                        ['clusters', 'cluster', 'children'].forEach(key => {
-                            const arr = node[key];
-                            if (Array.isArray(arr)) {
-                                arr.forEach(c => {
-                                    if (c && c.name && isCityType(c.type || c.cluster_type)) {
-                                        result.push({ id: c.id, name: c.name, code: c.code || '', cluster_type: (c.type || c.cluster_type || '').toLowerCase().includes('metro') ? 'Metro City' : 'City' });
-                                    }
-                                    walk(c);
-                                });
-                            }
-                        });
-
-                        ['continents', 'countries', 'states', 'districts', 'mandals', 'towns', 'villages', 'locations'].forEach(key => {
-                            if (Array.isArray(node[key])) node[key].forEach(walk);
-                        });
-                    };
-
-                    hierarchy.forEach(walk);
-
-                    const seen = new Set();
-                    const finalCities = result.filter(loc => { if (seen.has(loc.name)) return false; seen.add(loc.name); return true; }).sort((a,b) => a.name.localeCompare(b.name));
-                    setLocationsPool(finalCities);
-                } catch (err) {
-                    console.error("Geo hierarchy fetch failed:", err);
-                }
-
-                if (mealCatRes.data.length > 0) setMealCategories(mealCatRes.data.filter(m => m.status).map(m => m.category_name));
-                if (mealTypeRes.data.length > 0) setMealTypes(mealTypeRes.data.filter(m => m.status).map(m => m.meal_type));
-
-                // Populate Incidental
-                if (incTypeRes.data.length > 0) setIncidentalTypes(incTypeRes.data.filter(m => m.status).map(m => m.expense_type));
-
-            } catch (error) {
-                console.error("Failed to fetch masters:", error);
-            }
-        };
-        fetchMasters();
-
-        const fetchStayBookingMasters = async () => {
-            try {
-                const definitionsRes = await api.get('/api/custom-master-definitions/');
-                const definitions = definitionsRes.data || [];
-                const bookingTypeDef = definitions.find(def => def.table_name === 'Stay Booking Type');
-                const bookingSourceDef = definitions.find(def => def.table_name === 'Stay Booking Source');
-
-                const requests = [];
-                if (bookingTypeDef?.id) requests.push(api.get(`/api/custom-master-values/?definition=${bookingTypeDef.id}`));
-                else requests.push(Promise.resolve({ data: [] }));
-                if (bookingSourceDef?.id) requests.push(api.get(`/api/custom-master-values/?definition=${bookingSourceDef.id}`));
-                else requests.push(Promise.resolve({ data: [] }));
-
-                const [bookingTypeRes, bookingSourceRes] = await Promise.all(requests);
-                setStayBookingTypes((bookingTypeRes.data || []).filter(item => item.status !== false).map(item => item.name));
-                setStayBookingSources((bookingSourceRes.data || []).filter(item => item.status !== false).map(item => item.name));
-            } catch (error) {
-                console.warn('Could not fetch stay booking masters:', error);
-            }
-        };
-        fetchStayBookingMasters();
-
-        const fetchFoodMasters = async () => {
-            try {
-                const definitionsRes = await api.get('/api/custom-master-definitions/');
-                const definitions = definitionsRes.data || [];
-                const mealSourceDef = definitions.find(def => ['Meal Source', 'MealSource', 'Food Source', 'Meal Source Master'].includes(def.table_name));
-                const mealProviderDef = definitions.find(def => ['Provider', 'Meal Provider', 'Food Provider', 'Meal Provider Master'].includes(def.table_name));
-
-                const requests = [];
-                if (mealSourceDef?.id) requests.push(api.get(`/api/custom-master-values/?definition=${mealSourceDef.id}`));
-                else requests.push(Promise.resolve({ data: [] }));
-                if (mealProviderDef?.id) requests.push(api.get(`/api/custom-master-values/?definition=${mealProviderDef.id}`));
-                else requests.push(Promise.resolve({ data: [] }));
-
-                const [mealSourceRes, mealProviderRes] = await Promise.all(requests);
-                setMealSources((mealSourceRes.data || []).filter(item => item.status !== false).map(item => item.name));
-                setMealProviders((mealProviderRes.data || []).filter(item => item.status !== false).map(item => item.name));
-            } catch (error) {
-                console.warn('Could not fetch food masters:', error);
-            }
-        };
-        fetchFoodMasters();
-
-        // Fetch fuel rates for 2 Wheeler and 4 Wheeler for current user's state
+        // Fetch fuel rates for 2 Wheeler and 4 Wheeler (can still be dynamic if config exists)
         const fetchFuelRates = async () => {
             try {
                 const [rate2W, rate4W] = await Promise.all([
@@ -529,20 +414,15 @@ const TripExpenseGrid = ({
                 if (rate2W.data?.rate_per_km) rates['2 Wheeler'] = parseFloat(rate2W.data.rate_per_km);
                 if (rate4W.data?.rate_per_km) rates['4 Wheeler'] = parseFloat(rate4W.data.rate_per_km);
 
-                // Fallback: If my_rate returns null (e.g. state mismatch), fetch general list
                 if (Object.keys(rates).length === 0) {
-                    const resAll = await api.get('/api/masters/fuel-rate-masters/');
-                    if (Array.isArray(resAll.data)) {
-                        resAll.data.forEach(item => {
-                            if (item.vehicle_type === '2 Wheeler' && !rates['2 Wheeler']) rates['2 Wheeler'] = parseFloat(item.rate_per_km);
-                            if (item.vehicle_type === '4 Wheeler' && !rates['4 Wheeler']) rates['4 Wheeler'] = parseFloat(item.rate_per_km);
-                        });
-                    }
+                    rates['2 Wheeler'] = 4.5;
+                    rates['4 Wheeler'] = 12.0;
                 }
 
                 if (Object.keys(rates).length > 0) setFuelRates(rates);
             } catch (err) {
                 console.warn('Could not fetch fuel rates:', err);
+                setFuelRates({ '2 Wheeler': 4.5, '4 Wheeler': 12.0 });
             }
         };
         fetchFuelRates();
@@ -558,24 +438,24 @@ const TripExpenseGrid = ({
                     const rate = fuelRates[vehicleKey];
                     const start = parseFloat(r.details.odoStart || 0);
                     const end = parseFloat(r.details.odoEnd || 0);
-                    
+
                     if (!isNaN(start) && !isNaN(end) && end > start && rate) {
-                         const distKm = end - start;
-                         const fuelAmt = (distKm * rate).toFixed(2);
-                         const newDetails = { ...r.details, fuelAmount: fuelAmt, isAutoCalculated: true };
-                         
-                         if (newDetails.localIncidentals) {
-                             newDetails.localIncidentals = newDetails.localIncidentals.map(inc => {
-                                  if (inc.type === 'Fuel') return { ...inc, amount: fuelAmt };
-                                  return inc;
-                             });
-                         }
-                         
-                         const tollAmt = parseFloat(newDetails.tollAmount || 0);
-                         const itemizedSum = (newDetails.localIncidentals || []).reduce((sum, item) => sum + parseFloat(item.amount || 0), 0);
-                         const totalAmt = (parseFloat(fuelAmt) + tollAmt + itemizedSum).toFixed(2);
-                         
-                         return { ...r, amount: totalAmt, details: newDetails };
+                        const distKm = end - start;
+                        const fuelAmt = (distKm * rate).toFixed(2);
+                        const newDetails = { ...r.details, fuelAmount: fuelAmt, isAutoCalculated: true };
+
+                        if (newDetails.localIncidentals) {
+                            newDetails.localIncidentals = newDetails.localIncidentals.map(inc => {
+                                if (inc.type === 'Fuel') return { ...inc, amount: fuelAmt };
+                                return inc;
+                            });
+                        }
+
+                        const tollAmt = parseFloat(newDetails.tollAmount || 0);
+                        const itemizedSum = (newDetails.localIncidentals || []).reduce((sum, item) => sum + parseFloat(item.amount || 0), 0);
+                        const totalAmt = (parseFloat(fuelAmt) + tollAmt + itemizedSum).toFixed(2);
+
+                        return { ...r, amount: totalAmt, details: newDetails };
                     }
                 }
                 return r;
@@ -1436,7 +1316,8 @@ const TripExpenseGrid = ({
                 travelStatus: 'Completed',
                 checkInTime: '',
                 checkOutTime: '',
-                selfies: [] // Added for Local Travel
+                selfies: [], // Added for Local Travel
+                localIncidentals: targetNature === 'Local Travel' ? [{ type: '', amount: '' }] : []
             },
             timeDetails: {
                 boardingDate: new Date().toISOString().split('T')[0],
@@ -2541,9 +2422,9 @@ const TripExpenseGrid = ({
                             )}
                         </div>
 
-                        <div className="incidental-card-grid trip-travel-card-grid">
+                        <div className="incidental-card-grid travel-grid-layout">
                             {/* 1. Mode & Booking */}
-                            <div className="incidental-form-card">
+                            <div className="incidental-form-card travel-card-mode">
                                 <div className="incidental-card-head">
                                     <Receipt size={14} />
                                     <span>Mode &amp; Booking</span>
@@ -2574,7 +2455,7 @@ const TripExpenseGrid = ({
                                 </div>
                             </div>
                             {/* 2. Booking Details */}
-                            <div className="incidental-form-card">
+                            <div className="incidental-form-card travel-card-booking">
                                 <div className="incidental-card-head">
                                     <Calendar size={14} />
                                     <span>Booking Details</span>
@@ -2595,7 +2476,7 @@ const TripExpenseGrid = ({
                                 </div>
                             </div>
                             {/* 3. Route Details */}
-                            <div className="incidental-form-card">
+                            <div className="incidental-form-card travel-card-route">
                                 <div className="incidental-card-head">
                                     <MapPin size={14} />
                                     <span>Route Details</span>
@@ -2634,7 +2515,7 @@ const TripExpenseGrid = ({
                                 </div>
                             </div>
                             {/* 4. Travel Details (Dynamic) */}
-                            <div className="incidental-form-card">
+                            <div className="incidental-form-card travel-card-details">
                                 <div className="incidental-card-head">
                                     <Plane size={14} />
                                     <span>Travel Details</span>
@@ -2747,7 +2628,7 @@ const TripExpenseGrid = ({
                                                 <label>Cab Type</label>
                                                 <select className="cat-input" value={row.details.vehicleType || ''} onChange={e => updateDetails(row.id, 'vehicleType', e.target.value)} disabled={isLocked}>
                                                     <option value="">Select Type</option>
-                                                    {intercityCabVehicleTypes.map(v => <option key={v} value={v}>{v}</option>)}
+                                                    {CAB_VEHICLE_TYPES.map(v => <option key={v} value={v}>{v}</option>)}
                                                 </select>
                                             </div>
                                             <div className="input-with-label-mini">
@@ -2843,7 +2724,7 @@ const TripExpenseGrid = ({
 
                             {/* 6. Ticket Details */}
                             {mode !== 'Intercity Cab' && (
-                                <div className="incidental-form-card">
+                                <div className="incidental-form-card travel-card-ticket">
                                     <div className="incidental-card-head">
                                         <Receipt size={14} />
                                         <span>Ticket Details</span>
@@ -2869,7 +2750,7 @@ const TripExpenseGrid = ({
                             )}
 
                             {/* 7. Expense */}
-                            <div className="incidental-form-card incidental-amount-card">
+                            <div className="incidental-form-card incidental-amount-card travel-card-expense">
                                 <div className="incidental-card-head">
                                     <IndianRupee size={14} />
                                     <span>Expense</span>
@@ -2934,7 +2815,7 @@ const TripExpenseGrid = ({
                                     </div>
                                 </div>
                             </div>
-                            <div className="incidental-form-card incidental-upload-card">
+                            <div className="incidental-form-card incidental-upload-card travel-card-upload">
                                 <div className="incidental-card-head">
                                     <Upload size={14} />
                                     <span>Upload</span>
@@ -2996,7 +2877,7 @@ const TripExpenseGrid = ({
 
         return (
             <tr key={row.id} className="category-row-block incidental-card-row">
-                <td>
+                <td colSpan={10}>
                     <div className="incidental-entry-shell local-entry-shell">
                         <div className="incidental-entry-header">
                             <div className="incidental-entry-title">
@@ -3146,11 +3027,11 @@ const TripExpenseGrid = ({
                                                         // Exclude if already selected in another row
                                                         const isDuplicate = (row.details.localIncidentals || []).some((otherItem, otherIdx) => otherIdx !== idx && otherItem.type === t);
                                                         if (isDuplicate) return false;
-                                                        
+
                                                         // Hide Fuel or Toll if already auto-calculated and displayed at the top
                                                         if (t === 'Fuel' && parseFloat(row.details.fuelAmount || 0) > 0) return false;
                                                         if (t === 'Toll Charges' && parseFloat(row.details.tollAmount || 0) > 0) return false;
-                                                        
+
                                                         return true;
                                                     }).map(t => <option key={t} value={t}>{t}</option>)}
                                                 </select>
@@ -3333,7 +3214,7 @@ const TripExpenseGrid = ({
 
         return (
             <tr key={row.id} className="category-row-block incidental-card-row">
-                <td>
+                <td colSpan={100} style={{ padding: '0', border: 'none' }}>
                     <div className="incidental-entry-shell food-entry-shell">
                         <div className="incidental-entry-header">
                             <div className="incidental-entry-title">
@@ -3521,10 +3402,10 @@ const TripExpenseGrid = ({
 
     const renderAccommodationCard = (row) => {
         const accommodationInvoiceNumbers = getAccommodationInvoiceNumbers(row);
-        const stayBookingTypesLocal = ['Company Booking', 'Walk-in', 'Self Booking (Offline)', 'Online Booking'];
-        const stayBookingSourcesLocal = ['Agoda', 'Booking.com', 'OYO'];
-        const stayTypesLocal = ['Hotel Stay', 'Guest House', 'Client Provided', 'Self Stay'];
-        const roomTypesLocal = ['Standard', 'Deluxe', 'Executive', 'Suite'];
+// Deleted local fallback
+// Deleted local fallback
+// Deleted local fallback
+// Deleted local fallback
         const numberOfNights = row.details.nights || 0;
         const scheduledCheckInDate = row.details.scheduledCheckInDate || row.details.checkIn || '';
         const scheduledCheckInTime = row.details.scheduledCheckInTime || row.details.checkInTime || '';
@@ -3554,198 +3435,147 @@ const TripExpenseGrid = ({
                             )}
                         </div>
 
-                        <div className="incidental-card-grid accommodation-card-grid trip-accommodation-card-grid">
-                            <div className="incidental-form-card accommodation-schedule-card">
-                                <div className="incidental-card-head">
-                                    <Calendar size={14} />
-                                    <span>Stay Schedule</span>
-                                </div>
-                                <div className="incidental-card-body">
-                                    <div className="accommodation-schedule-grid">
-                                        <div className="input-with-label-mini">
-                                            <label>Scheduled Check-in Date *</label>
-                                            <input type="date" min={minDate} max={maxDate} className="cat-input" value={scheduledCheckInDate} onChange={e => updateDetails(row.id, 'scheduledCheckInDate', e.target.value)} disabled={isLocked} />
+                        <div className="accommodation-form-layout">
+                            {/* SECTION 1: Stay Timeline */}
+                            <div className="accommodation-timeline-section">
+                                {/* Scheduled Row */}
+                                <div className="timeline-row">
+                                    <div className="timeline-label">Scheduled</div>
+                                    <div className="timeline-inputs">
+                                        <div className="timeline-group">
+                                            <span className="group-label">Check-in</span>
+                                            <div className="group-fields">
+                                                <input type="date" min={minDate} max={maxDate} className="cat-input" value={scheduledCheckInDate || ''} onChange={e => updateDetails(row.id, 'scheduledCheckInDate', e.target.value)} disabled={isLocked} />
+                                                <input type="time" className="cat-input" value={scheduledCheckInTime || ''} onChange={e => updateDetails(row.id, 'scheduledCheckInTime', e.target.value)} disabled={isLocked} />
+                                            </div>
                                         </div>
-                                        <div className="input-with-label-mini">
-                                            <label>Scheduled Check-in Time *</label>
-                                            <input type="time" className="cat-input" value={scheduledCheckInTime} onChange={e => updateDetails(row.id, 'scheduledCheckInTime', e.target.value)} disabled={isLocked} />
-                                        </div>
-                                        <div className="input-with-label-mini">
-                                            <label>Scheduled Check-out Date *</label>
-                                            <input type="date" min={minDate} max={maxDate} className="cat-input" value={scheduledCheckOutDate} onChange={e => updateDetails(row.id, 'scheduledCheckOutDate', e.target.value)} disabled={isLocked} />
-                                        </div>
-                                        <div className="input-with-label-mini">
-                                            <label>Scheduled Check-out Time *</label>
-                                            <input type="time" className="cat-input" value={scheduledCheckOutTime} onChange={e => updateDetails(row.id, 'scheduledCheckOutTime', e.target.value)} disabled={isLocked} />
-                                        </div>
-                                        <div className="input-with-label-mini">
-                                            <label>Actual Check-in Date *</label>
-                                            <input type="date" min={minDate} max={maxDate} className="cat-input" value={actualCheckInDate} onChange={e => updateDetails(row.id, 'actualCheckInDate', e.target.value)} disabled={isLocked} />
-                                        </div>
-                                        <div className="input-with-label-mini">
-                                            <label>Actual Check-in Time *</label>
-                                            <input type="time" className="cat-input" value={actualCheckInTime} onChange={e => updateDetails(row.id, 'actualCheckInTime', e.target.value)} disabled={isLocked} />
-                                        </div>
-                                        <div className="input-with-label-mini">
-                                            <label>Actual Check-out Date *</label>
-                                            <input type="date" min={minDate} max={maxDate} className="cat-input" value={actualCheckOutDate} onChange={e => updateDetails(row.id, 'actualCheckOutDate', e.target.value)} disabled={isLocked} />
-                                        </div>
-                                        <div className="input-with-label-mini">
-                                            <label>Actual Check-out Time *</label>
-                                            <input type="time" className="cat-input" value={actualCheckOutTime} onChange={e => updateDetails(row.id, 'actualCheckOutTime', e.target.value)} disabled={isLocked} />
+                                        
+                                        <div className="timeline-arrow"><span>→</span></div>
+
+                                        <div className="timeline-group">
+                                            <span className="group-label">Check-out</span>
+                                            <div className="group-fields">
+                                                <input type="date" min={minDate} max={maxDate} className="cat-input" value={scheduledCheckOutDate || ''} onChange={e => updateDetails(row.id, 'scheduledCheckOutDate', e.target.value)} disabled={isLocked} />
+                                                <input type="time" className="cat-input" value={scheduledCheckOutTime || ''} onChange={e => updateDetails(row.id, 'scheduledCheckOutTime', e.target.value)} disabled={isLocked} />
+                                            </div>
                                         </div>
                                     </div>
-                                    <div className="accommodation-nights-chip">
-                                        <span>Nights</span>
-                                        <strong>{numberOfNights}</strong>
+                                </div>
+
+                                <div className="timeline-divider"></div>
+
+                                {/* Actual Row */}
+                                <div className="timeline-row">
+                                    <div className="timeline-label">Actual</div>
+                                    <div className="timeline-inputs">
+                                        <div className="timeline-group">
+                                            <span className="group-label">Check-in</span>
+                                            <div className="group-fields">
+                                                <input type="date" min={minDate} max={maxDate} className="cat-input" value={actualCheckInDate || ''} onChange={e => updateDetails(row.id, 'actualCheckInDate', e.target.value)} disabled={isLocked} />
+                                                <input type="time" className="cat-input" value={actualCheckInTime || ''} onChange={e => updateDetails(row.id, 'actualCheckInTime', e.target.value)} disabled={isLocked} />
+                                            </div>
+                                        </div>
+
+                                        <div className="timeline-arrow"><span>→</span></div>
+
+                                        <div className="timeline-group">
+                                            <span className="group-label">Check-out</span>
+                                            <div className="group-fields">
+                                                <input type="date" min={minDate} max={maxDate} className="cat-input" value={actualCheckOutDate || ''} onChange={e => updateDetails(row.id, 'actualCheckOutDate', e.target.value)} disabled={isLocked} />
+                                                <input type="time" className="cat-input" value={actualCheckOutTime || ''} onChange={e => updateDetails(row.id, 'actualCheckOutTime', e.target.value)} disabled={isLocked} />
+                                            </div>
+                                        </div>
+
+                                        <div className="accommodation-nights-chip" style={{ marginLeft: 'auto', display: 'flex', gap: '5px', alignItems: 'center', background: '#f8fafc', padding: '4px 8px', borderRadius: '4px', border: '1px solid #e2e8f0' }}>
+                                            <span style={{ fontSize: '0.7rem', color: '#64748b', fontWeight: '500' }}>Nights:</span>
+                                            <strong style={{ fontSize: '0.8rem', color: '#0f172a', fontWeight: '700' }}>{numberOfNights}</strong>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
 
-                            <div className="incidental-form-card">
-                                <div className="incidental-card-head">
-                                    <Receipt size={14} />
-                                    <span>Booking Details</span>
-                                </div>
-                                <div className="incidental-card-body">
-                                    <div className="input-with-label-mini">
-                                        <label>Booking Type *</label>
-                                        <select className="cat-input" value={row.details.bookingType || ''} onChange={e => {
-                                            const val = e.target.value;
-                                            updateDetails(row.id, 'bookingType', val);
-                                            if (val === 'Company Booking') {
-                                                updateRow(row.id, 'amount', '0.00');
-                                            } else if (val === 'Online Booking') {
-                                                updateDetails(row.id, 'accomType', 'Hotel Stay');
-                                            }
-                                        }} disabled={isLocked}>
-                                            <option value="">Select Booking Type</option>
-                                            {stayBookingTypesLocal.map(option => <option key={option} value={option}>{option}</option>)}
-                                        </select>
-                                    </div>
-                                    {row.details.bookingType === 'Online Booking' && (
-                                        <>
+                            {/* SECTION 2: Details Columns (3 Columns) */}
+                            <div className="accommodation-details-section">
+                                {/* 1. Lodging Info */}
+                                <div className="details-box">
+                                    <div className="details-box-head"><span style={{fontSize: '0.7rem', fontWeight: 700, color: '#334155', textTransform: 'uppercase'}}>Lodging Info</span></div>
+                                    <div className="details-box-body" style={{padding: '12px', display: 'flex', flexDirection: 'column', gap: '8px'}}>
+                                        <div className="input-with-label-mini">
+                                            <label>Stay Type *</label>
+                                            <select className="cat-input" value={row.details.accomType || ''} onChange={e => updateDetails(row.id, 'accomType', e.target.value)} disabled={isLocked}>
+                                                <option value="">Select Stay Type</option>
+                                                {stayTypes.map(o => <option key={o} value={o}>{o}</option>)}
+                                            </select>
+                                        </div>
+                                        {['Hotel Stay', 'Guest House'].includes(row.details.accomType) && (
                                             <div className="input-with-label-mini">
-                                                <label>Booking Source *</label>
-                                                <select className="cat-input" value={row.details.bookingSource || ''} onChange={e => updateDetails(row.id, 'bookingSource', e.target.value)} disabled={isLocked}>
-                                                    <option value="">Select Booking Source</option>
-                                                    {stayBookingSourcesLocal.map(option => <option key={option} value={option}>{option}</option>)}
-                                                </select>
+                                                <label>{row.details.accomType === 'Guest House' ? 'Guest House Info *' : 'Hotel Name *'}</label>
+                                                <input type="text" className="cat-input" value={row.details.hotelName || ''} onChange={e => updateDetails(row.id, 'hotelName', e.target.value)} disabled={isLocked} />
                                             </div>
+                                        )}
+                                        <div className="input-with-label-mini">
+                                            <label>Remarks</label>
+                                            <textarea className="cat-input" placeholder="Enter remarks" value={row.details.remarks || ''} onChange={e => updateDetails(row.id, 'remarks', e.target.value)} disabled={isLocked} rows={1} />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* 2. Booking Details */}
+                                <div className="details-box">
+                                    <div className="details-box-head"><span style={{fontSize: '0.7rem', fontWeight: 700, color: '#334155', textTransform: 'uppercase'}}>Booking Details</span></div>
+                                    <div className="details-box-body" style={{padding: '12px', display: 'flex', flexDirection: 'column', gap: '8px'}}>
+                                        <div className="input-with-label-mini">
+                                            <label>Booking Type *</label>
+                                            <select className="cat-input" value={row.details.bookingType || ''} onChange={e => updateDetails(row.id, 'bookingType', e.target.value)} disabled={isLocked}>
+                                                <option value="">Select Booking Type</option>
+                                                {stayBookingTypes.map(o => <option key={o} value={o}>{o}</option>)}
+                                            </select>
+                                        </div>
+                                        {row.details.bookingType === 'Online Booking' && (
                                             <div className="input-with-label-mini">
                                                 <label>Booking ID *</label>
                                                 <input type="text" className="cat-input" placeholder="Enter Booking ID" value={row.details.bookingId || ''} onChange={e => updateDetails(row.id, 'bookingId', e.target.value)} disabled={isLocked} />
                                             </div>
-                                        </>
-                                    )}
-                                </div>
-                            </div>
-
-                            <div className="incidental-form-card">
-                                <div className="incidental-card-head">
-                                    <Home size={14} />
-                                    <span>Lodging Info</span>
-                                </div>
-                                <div className="incidental-card-body">
-                                    <div className="input-with-label-mini">
-                                        <label>Stay Type *</label>
-                                        <select className="cat-input" value={row.details.accomType || ''} onChange={e => updateDetails(row.id, 'accomType', e.target.value)} disabled={isLocked}>
-                                            <option value="">Select Stay Type</option>
-                                            {stayTypesLocal.map(option => <option key={option} value={option}>{option}</option>)}
-                                        </select>
-                                    </div>
-                                    {['Hotel Stay', 'Guest House'].includes(row.details.accomType) && (
-                                        <div className="input-with-label-mini">
-                                            <label>{row.details.accomType === 'Guest House' ? 'Guest House Name *' : 'Hotel Name *'}</label>
-                                            <input type="text" className="cat-input" placeholder={row.details.accomType === 'Guest House' ? 'Enter guest house name' : 'Enter hotel name'} value={row.details.hotelName || ''} onChange={e => updateDetails(row.id, 'hotelName', e.target.value)} disabled={isLocked} />
-                                        </div>
-                                    )}
-                                    {row.details.accomType === 'Hotel Stay' && (
-                                        <div className="input-with-label-mini">
-                                            <label>Room Type *</label>
-                                            <select className="cat-input" value={row.details.roomType || ''} onChange={e => updateDetails(row.id, 'roomType', e.target.value)} disabled={isLocked}>
-                                                <option value="">Select Room Type</option>
-                                                {roomTypesLocal.map(option => <option key={option} value={option}>{option}</option>)}
-                                            </select>
-                                        </div>
-                                    )}
-                                    <div className="input-with-label-mini">
-                                        <label>{['Client Provided', 'Self Stay'].includes(row.details.accomType) ? 'Remarks *' : 'Remarks'}</label>
-                                        <textarea className="cat-input" placeholder="Enter remarks" value={row.details.remarks || ''} onChange={e => updateDetails(row.id, 'remarks', e.target.value)} disabled={isLocked} rows={2} style={{ resize: 'vertical' }} />
+                                        )}
                                     </div>
                                 </div>
-                            </div>
 
-                            <div className="incidental-form-card incidental-amount-card">
-                                <div className="incidental-card-head">
-                                    <IndianRupee size={14} />
-                                    <span>Expense</span>
-                                </div>
-                                <div className="incidental-card-body">
-                                    <div className="input-with-label-mini">
-                                        <label>Amount *</label>
-                                        <div className="amount-with-currency">
-                                            <span className="currency-symbol">₹</span>
-                                            <input
-                                                type="text"
-                                                className="cat-input"
-                                                placeholder="0.00"
-                                                value={row.amount || ''}
-                                                onChange={e => updateRow(row.id, 'amount', e.target.value)}
-                                                disabled={isLocked || row.details.bookingType === 'Company Booking'}
-                                                onBlur={e => {
-                                                    if (row.details.accomType === 'Self Stay' && e.target.value) {
-                                                        const reduced = (parseFloat(e.target.value) * 0.5).toFixed(2);
-                                                        updateRow(row.id, 'amount', reduced);
-                                                    }
-                                                }}
-                                            />
-                                        </div>
-                                        {row.details.accomType === 'Self Stay' && row.amount && (
-                                            <div style={{ color: '#0369a1', fontSize: '11px', marginTop: '4px', fontWeight: 500 }}>
-                                                💡 50% Reimbursement Applied: {row.amount ? `₹${(parseFloat(row.amount) * 0.5).toFixed(2)}` : '₹0.00'} will be stored on leave.
+                                {/* 3. Expense & Upload */}
+                                <div className="details-box">
+                                    <div className="details-box-head"><span style={{fontSize: '0.7rem', fontWeight: 700, color: '#334155', textTransform: 'uppercase'}}>Expense & Upload</span></div>
+                                    <div className="details-box-body" style={{padding: '12px', display: 'flex', flexDirection: 'column', gap: '8px'}}>
+                                        <div className="input-with-label-mini">
+                                            <label>Amount *</label>
+                                            <div className="amount-with-currency">
+                                                <span className="currency-symbol">₹</span>
+                                                <input type="text" className="cat-input" placeholder="0.00" value={row.amount || ''} onChange={e => updateRow(row.id, 'amount', e.target.value)} disabled={isLocked || row.details.bookingType === 'Company Booking'} />
                                             </div>
-                                        )}
-                                    </div>
-                                    <div className="input-with-label-mini">
-                                        <label>Early Check-in Charges</label>
-                                        <input type="number" className="cat-input" placeholder="0.00" value={row.details.earlyCheckInCharges || ''} onChange={e => updateDetails(row.id, 'earlyCheckInCharges', e.target.value)} disabled={isLocked} />
-                                    </div>
-                                    <div className="input-with-label-mini">
-                                        <label>Late Check-out Charges</label>
-                                        <input type="number" className="cat-input" placeholder="0.00" value={row.details.lateCheckOutCharges || ''} onChange={e => updateDetails(row.id, 'lateCheckOutCharges', e.target.value)} disabled={isLocked} />
+                                        </div>
+                                        <div style={{ display: 'flex', gap: '8px' }}>
+                                            <div className="input-with-label-mini" style={{ flex: 1 }}>
+                                                <label style={{ fontSize: '0.6rem' }}>Early Chgs</label>
+                                                <input type="number" className="cat-input" placeholder="0.00" value={row.details.earlyCheckInCharges || ''} onChange={e => updateDetails(row.id, 'earlyCheckInCharges', e.target.value)} disabled={isLocked} />
+                                            </div>
+                                            <div className="input-with-label-mini" style={{ flex: 1 }}>
+                                                <label style={{ fontSize: '0.6rem' }}>Late Chgs</label>
+                                                <input type="number" className="cat-input" placeholder="0.00" value={row.details.lateCheckOutCharges || ''} onChange={e => updateDetails(row.id, 'lateCheckOutCharges', e.target.value)} disabled={isLocked} />
+                                            </div>
+                                        </div>
+                                        
+                                        <div className="compact-upload-bar" style={{ marginTop: 'auto', paddingTop: '10px', borderTop: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                            {!isLocked && (
+                                                <label className="incidental-upload-btn" htmlFor={`accom-f-${row.id}`} style={{ padding: '4px 8px', fontSize: '0.75rem', gap: '4px', background: '#f8fafc', border: '1px solid #e2e8f0' }}>
+                                                    <span>Upload</span>
+                                                </label>
+                                            )}
+                                            <input type="file" id={`accom-f-${row.id}`} hidden multiple accept="image/*,.pdf" onChange={e => handleFileUpload(row.id, e.target.files)} />
+                                            <span style={{ fontSize: '0.65rem', color: '#64748b' }}>
+                                                {(row.bills || []).length > 0 ? `${(row.bills || []).length} attached` : 'No files'}
+                                            </span>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
-
-                            <div className="incidental-form-card incidental-upload-card">
-                                <div className="incidental-card-head">
-                                    <Upload size={14} />
-                                    <span>Upload</span>
-                                </div>
-                                <div className="incidental-card-body">
-                                    <div className="incidental-upload-top">
-                                        {!isLocked && (
-                                            <label className="incidental-upload-btn" htmlFor={`accom-f-${row.id}`}>
-                                                <Upload size={14} />
-                                                <span>Upload Bills</span>
-                                            </label>
-                                        )}
-                                        <input
-                                            type="file"
-                                            id={`accom-f-${row.id}`}
-                                            hidden
-                                            multiple
-                                            accept="image/*,.pdf"
-                                            onChange={e => {
-                                                handleFileUpload(row.id, e.target.files);
-                                                e.target.value = '';
-                                            }}
-                                        />
-                                        <span className="incidental-upload-count">
-                                            {(row.bills || []).length > 0 ? `${(row.bills || []).length} file(s) attached` : 'No files attached'}
-                                        </span>
-                                    </div>
 
                                     {(row.bills || []).length > 0 && (
                                         <div className="incidental-upload-list">
@@ -3764,11 +3594,8 @@ const TripExpenseGrid = ({
                                             ))}
                                         </div>
                                     )}
-
                                 </div>
                             </div>
-                        </div>
-                    </div>
                 </td>
             </tr>
         );
@@ -4347,7 +4174,7 @@ const TripExpenseGrid = ({
                                                                             <div className="field-group mt-1">
                                                                                 <select value={row.details.vehicleType || ''} onChange={e => updateDetails(row.id, 'vehicleType', e.target.value)} style={{ flex: 1.5 }}>
                                                                                     <option value="">Vehicle Type</option>
-                                                                                    {intercityCabVehicleTypes.map(v => <option key={v} value={v}>{v}</option>)}
+                                                                                    {CAB_VEHICLE_TYPES.map(v => <option key={v} value={v}>{v}</option>)}
                                                                                 </select>
                                                                                 <input type="text" placeholder="Driver Name" value={row.details.driverName || ''} onChange={e => updateDetails(row.id, 'driverName', e.target.value)} style={{ flex: 1 }} />
                                                                             </div>
@@ -5408,11 +5235,154 @@ const TripExpenseGrid = ({
                 </div>
             )}
             <style>{`
+                /* 1. The Main Card Container */
+                .incidental-entry-shell {
+                    background: #ffffff;
+                    border: 1px solid #e2e8f0;
+                    border-radius: 12px;
+                    padding: 20px;
+                    margin-bottom: 12px !important;
+                    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03) !important;
+                }
+
+                /* Card Header (Title and Delete Button) */
+                .incidental-entry-header {
+                    display: flex !important;
+                    justify-content: space-between !important;
+                    align-items: center !important;
+                    margin-bottom: 20px !important;
+                    padding-bottom: 12px !important;
+                    border-bottom: 2px solid #f1f5f9 !important;
+                }
+
+                .incidental-entry-title {
+                    display: flex !important;
+                    align-items: center !important;
+                    gap: 12px !important;
+                }
+
+                .incidental-entry-title strong {
+                    font-size: 1rem !important;
+                    color: #1e293b !important;
+                    display: block !important;
+                }
+
+                .incidental-entry-title span {
+                    font-size: 0.75rem !important;
+                    color: #64748b !important;
+                }
+
+                /* 2. Individual section boxes inside the card */
+                .incidental-form-card {
+                    background: #f8fafc !important; /* Subtle grey background */
+                    border: 1px solid #e2e8f0 !important;
+                    border-radius: 8px !important;
+                    display: flex !important;
+                    flex-direction: column !important;
+                    /* height: 100% !important; */
+                    overflow: hidden !important;
+                }
+
+                /* The header bar for each group (e.g., "LOCATION") */
+                .incidental-card-head {
+                    display: flex !important;
+                    align-items: center !important;
+                    gap: 8px !important;
+                    padding: 8px 12px !important;
+                    background: #f1f5f9 !important; /* Darker grey for the header */
+                    border-bottom: 1px solid #e2e8f0 !important;
+                }
+
+                .incidental-card-head span {
+                    font-size: 0.68rem !important;
+                    font-weight: 800 !important;
+                    color: #475569 !important;
+                    text-transform: uppercase !important;
+                    letter-spacing: 0.05em !important;
+                }
+
+                /* The content area inside each group */
+                .incidental-card-body {
+                    padding: 15px !important;
+                    flex: 1 !important;
+                }
+
+                /* 3. Highlighting the Expense (Blue Accent) */
+                .incidental-amount-card {
+                    border-left: 4px solid #4f46e5 !important; /* Indigo accent */
+                }
+
+                .incidental-amount-card .incidental-card-head {
+                    background: #eef2ff !important; /* Very light blue */
+                }
+
+                .incidental-amount-card .incidental-card-head span {
+                    color: #4338ca !important;
+                }
+
+                /* 4. Input & Label Refinement */
+                .input-with-label-mini {
+                    margin-bottom: 10px !important;
+                }
+
+                .input-with-label-mini label {
+                    display: block !important;
+                    font-size: 0.62rem !important;
+                    font-weight: 700 !important;
+                    color: #94a3b8 !important;
+                    text-transform: uppercase !important;
+                    margin-bottom: 4px !important;
+                }
+
+                /* Cleaner inputs */
+                .cat-input {
+                    width: 100% !important;
+                    padding: 8px 10px !important;
+                    border: 1px solid #cbd5e1 !important;
+                    border-radius: 6px !important;
+                    font-size: 0.85rem !important;
+                    color: #334155 !important;
+                    background: white !important;
+                    transition: border-color 0.2s !important;
+                }
+
+                .cat-input:focus {
+                    border-color: #4f46e5 !important;
+                    outline: none !important;
+                    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1) !important;
+                }
+
+                /* Specifically for the Incidental Card Grid */
+                .incidental-card-grid {
+                    display: grid !important;
+                    grid-template-columns: repeat(5, 1fr) !important; 
+                    gap: 12px !important;
+                    align-items: start !important;
+                }
+
+                .incidental-textarea {
+                    min-height: 40px !important;
+                    height: 40px !important;
+                }
+
+                .amount-with-currency input {
+                    padding: 6px 8px !important;
+                }
+
+                /* Specifically for Food & Refreshments to force a single row */
+                .food-card-grid {
+                    display: grid !important;
+                    grid-template-columns: repeat(5, 1fr) !important; 
+                    gap: 12px !important;
+                    width: 100% !important;
+                    align-items: start !important;
+                }
+
                 .trip-local-card-grid {
                     display: grid !important;
                     grid-template-columns: repeat(3, 1fr) !important;
                     gap: 20px !important;
-                    align-items: stretch !important;
+                    align-items: start !important;
                 }
                 .trip-local-card-grid > :nth-child(1) { grid-column: 1 !important; grid-row: 1 !important; } /* Mode & Booking */
                 .trip-local-card-grid > :nth-child(2) { grid-column: 2 !important; grid-row: 1 !important; } /* Location */
@@ -5430,33 +5400,165 @@ const TripExpenseGrid = ({
                         grid-row: auto !important;
                     }
                 }
-                .trip-accommodation-card-grid {
+                /* Structured Form Layout for Accommodation */
+                .accommodation-form-layout {
+                    display: flex !important;
+                    flex-direction: column !important;
+                    gap: 16px !important;
+                    width: 100% !important;
+                }
+
+                .accommodation-timeline-section {
+                    background: #ffffff !important;
+                    border: 1px solid #e2e8f0 !important;
+                    border-radius: 8px !important;
+                    padding: 10px 14px !important; /* Reduced padding */
+                }
+
+                .timeline-row {
+                    display: flex !important;
+                    align-items: center !important;
+                    gap: 12px !important; /* Reduced gap */
+                }
+
+                .timeline-label {
+                    font-size: 0.7rem !important;
+                    font-weight: 700 !important;
+                    color: #64748b !important;
+                    text-transform: uppercase !important;
+                    width: 80px !important; /* Narrower labels */
+                    min-width: 80px !important;
+                }
+
+                .timeline-inputs {
+                    display: flex !important;
+                    flex: 1 !important;
+                    gap: 16px !important; /* Compact space between groups */
+                    align-items: center !important;
+                    justify-content: flex-start !important; /* NO STRETCH */
+                }
+
+                .timeline-group {
+                    display: flex !important;
+                    flex-direction: column !important;
+                    gap: 2px !important; /* Tighter label-to-input */
+                }
+
+                .group-label {
+                    font-size: 0.63rem !important;
+                    font-weight: 600 !important;
+                    color: #94a3b8 !important;
+                    margin-bottom: 0 !important;
+                }
+
+                .group-fields {
+                    display: flex !important;
+                    gap: 4px !important; /* Reduced date/time gap */
+                    align-items: center !important;
+                }
+
+                .group-fields input[type="date"] {
+                    width: 140px !important; /* Controlled sizes */
+                    max-width: 140px !important;
+                    padding: 4px 8px !important;
+                    font-size: 0.8rem !important;
+                }
+
+                .group-fields input[type="time"] {
+                    width: 95px !important; /* Controlled sizes */
+                    max-width: 95px !important;
+                    padding: 4px 8px !important;
+                    font-size: 0.8rem !important;
+                }
+
+                .timeline-arrow {
+                    color: #cbd5e1 !important;
+                    display: flex !important;
+                    align-items: center !important;
+                    padding-top: 10px !important;
+                    font-size: 0.8rem !important;
+                }
+
+                .timeline-divider {
+                    height: 1px !important;
+                    background: #f1f5f9 !important;
+                    margin: 8px 0 !important; /* Reduced divider gaps */
+                }
+
+                .accommodation-details-section {
                     display: grid !important;
                     grid-template-columns: repeat(3, 1fr) !important;
-                    gap: 20px !important;
-                    align-items: stretch !important;
+                    gap: 16px !important;
                 }
-                .trip-accommodation-card-grid > :nth-child(1) { grid-column: 1 !important; grid-row: 1 / span 2 !important; } /* Stay Schedule */
-                .trip-accommodation-card-grid > :nth-child(2) { grid-column: 2 !important; grid-row: 1 !important; } /* Booking Details */
-                .trip-accommodation-card-grid > :nth-child(3) { grid-column: 3 !important; grid-row: 1 !important; } /* Lodging Info */
-                .trip-accommodation-card-grid > :nth-child(4) { grid-column: 2 !important; grid-row: 2 !important; } /* Expense */
-                .trip-accommodation-card-grid > :nth-child(5) { grid-column: 3 !important; grid-row: 2 !important; } /* Upload */
+
+                .details-box {
+                    background: #ffffff !important;
+                    border: 1px solid #e2e8f0 !important;
+                    border-radius: 8px !important;
+                    display: flex !important;
+                    flex-direction: column !important;
+                    overflow: hidden !important;
+                }
+
+                .details-box-head {
+                    display: flex !important;
+                    align-items: center !important;
+                    gap: 8px !important;
+                    padding: 8px 12px !important;
+                    background: #f8fafc !important;
+                    border-bottom: 1px solid #e2e8f0 !important;
+                }
+               .accommodation-nights-chip {
+                    display: flex !important;
+                }
+                /* Allowed sequential single-row flow grid */
 
                 .trip-travel-card-grid {
                     display: grid !important;
                     grid-template-columns: repeat(4, 1fr) !important;
                     gap: 16px !important;
-                    align-items: stretch !important;
+                    align-items: start !important; /* Fix excessive stretching */
                 }
 
-                .travel-schedule-card {
-                    grid-column: span 2 !important;
+                .travel-grid-layout {
+                    display: grid !important;
+                    grid-template-columns: repeat(4, 1fr) !important; 
+                    gap: 16px !important;
+                    align-items: start !important; /* Fix excessive stretching */
+                }
+
+                @media (max-width: 1200px) {
+                    .travel-grid-layout {
+                        grid-template-columns: repeat(2, 1fr) !important;
+                    }
+                }
+
+                @media (max-width: 640px) {
+                    .travel-grid-layout {
+                        grid-template-columns: 1fr !important;
+                    }
+                }
+
+                .btn-delete-icon {
+                    background: #fee2e2;
+                    color: #dc2626;
+                    border: none;
+                    padding: 6px 12px;
+                    border-radius: 6px;
+                    font-size: 0.75rem;
+                    font-weight: 600;
+                    cursor: pointer;
+                    transition: 0.2s;
+                }
+
+                .btn-delete-icon:hover {
+                    background: #fecaca;
                 }
 
                 .travel-schedule-grid {
                     display: grid !important;
-                    grid-template-columns: repeat(4, 1fr) !important;
-                    gap: 12px !important;
+                    grid-template-columns: repeat(2, 1fr) !important;
+                    gap: 12px 16px !important;
                 }
 
                 @media (max-width: 1200px) {

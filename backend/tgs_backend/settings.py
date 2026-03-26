@@ -97,7 +97,7 @@ CSRF_TRUSTED_ORIGINS = [
     "http://192.168.1.147:6785",
     "http://192.168.1.147:6786",
     "http://192.168.1.147:6787",
-    "http://10.2.1.122:6786/ ",
+    "http://10.2.1.122:6786/",
 ]
 
 # Disable SSL/HTTPS enforcement for HTTP-only deployment

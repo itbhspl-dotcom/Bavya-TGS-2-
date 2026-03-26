@@ -89,7 +89,7 @@ export default function AdminMasterManagement() {
                     label: mod.name,
                     tables: tables
                 };
-            }).filter(g => g.tables.length > 0); // Keep modules that have tables
+            }); // Show all modules, even those without tables yet
 
             // 4. Add the configuration management group
             newGroups.push(CONFIG_GROUP);
