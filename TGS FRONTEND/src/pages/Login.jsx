@@ -101,8 +101,8 @@ const Login = () => {
                 </video>
                 <div className="visual-overlay"></div>
                 <div className="visual-content">
-                    <h1>TGS</h1>
-                    <h2>Travel & Expense</h2>
+                    {/* <h1>TGS</h1>
+                    <h2>Travel & Expense</h2> */}
                 </div>
             </div>
             <div className="login-form-area">
