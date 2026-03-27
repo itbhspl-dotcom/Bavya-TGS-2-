@@ -42,7 +42,7 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
   List<String> _accommodationRequests = [];
 
   String _logisticsType = 'long';
-  bool _considerLocal = true;
+  bool _considerLocal = false;
   String _distance = '';
   String? _routePathId;
   List<dynamic> _availablePaths = [];

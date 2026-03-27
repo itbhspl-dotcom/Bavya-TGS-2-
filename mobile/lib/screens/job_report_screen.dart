@@ -101,7 +101,7 @@ class _JobReportScreenState extends State<JobReportScreen> {
     });
   }
 
-  Future<void> _handleBatchAction(int batchId, String action) async {
+  Future<void> _handleBatchAction(String batchId, String action) async {
     try {
       await _tripService.handleBulkBatchAction(batchId, action);
       ScaffoldMessenger.of(context).showSnackBar(
@@ -264,7 +264,7 @@ class _JobReportScreenState extends State<JobReportScreen> {
               children: [
                 if (isActionable) ...[
                   TextButton(
-                    onPressed: () => _handleBatchAction(batch['id'], 'reject'),
+                    onPressed: () => _handleBatchAction(batch['id'].toString(), 'reject'),
                     child: Text(
                       'Reject',
                       style: GoogleFonts.inter(
@@ -276,7 +276,7 @@ class _JobReportScreenState extends State<JobReportScreen> {
                   ),
                   const SizedBox(width: 8),
                   TextButton(
-                    onPressed: () => _handleBatchAction(batch['id'], 'approve'),
+                    onPressed: () => _handleBatchAction(batch['id'].toString(), 'approve'),
                     child: Text(
                       'Approve Batch',
                       style: GoogleFonts.inter(

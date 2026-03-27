@@ -554,7 +554,7 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
               const SizedBox(width: 12),
               Container(
                 height: 60,
-                padding: const EdgeInsets.symmetric(horizontal: 16),
+                padding: const EdgeInsets.symmetric(horizontal: 12),
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(20),
@@ -592,6 +592,71 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
                 ),
               ),
             ],
+          ),
+          const SizedBox(height: 10),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: const Color(0xFFF1F5F9)),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.03),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<String>(
+                value: _filter,
+                isExpanded: true,
+                icon: const Icon(
+                  Icons.keyboard_arrow_down_rounded,
+                  color: Color(0xFFBB0633),
+                  size: 20,
+                ),
+                style: GoogleFonts.plusJakartaSans(
+                  color: const Color(0xFF0F172A),
+                  fontWeight: FontWeight.w700,
+                  fontSize: 13,
+                ),
+                items: [
+                  'All Status',
+                  'Approved',
+                  'On-Going',
+                  'Completed',
+                  'Settled',
+                  'Cancelled',
+                  'Rejected',
+                ]
+                    .map(
+                      (v) => DropdownMenuItem(
+                        value: v,
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 8,
+                              height: 8,
+                              margin: const EdgeInsets.only(right: 10),
+                              decoration: BoxDecoration(
+                                color: v == 'All Status'
+                                    ? Colors.grey.shade300
+                                    : _getStatusColor(v),
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                            Text(v),
+                          ],
+                        ),
+                      ),
+                    )
+                    .toList(),
+                onChanged: _onFilterChanged,
+              ),
+            ),
           ),
         ],
       ),
@@ -902,6 +967,31 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
                                 Row(
                                   children: [
                                     _cardDetailIcon(
+                                      Icons.person_outline_rounded,
+                                      const Color(0xFF8B5CF6),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Text(
+                                        t.employee,
+                                        style: GoogleFonts.plusJakartaSans(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w700,
+                                          color: const Color(0xFF475569),
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const Padding(
+                                  padding: EdgeInsets.symmetric(vertical: 10),
+                                  child: Divider(height: 1, color: Color(0xFFE2E8F0)),
+                                ),
+                                Row(
+                                  children: [
+                                    _cardDetailIcon(
                                       Icons.location_on_rounded,
                                       const Color(0xFFBB0633),
                                     ),
@@ -948,6 +1038,32 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
                             ),
                           ),
                           const SizedBox(height: 20),
+                        ] else ...[
+                          Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF8FAFC),
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(color: const Color(0xFFF1F5F9)),
+                            ),
+                            child: Row(
+                              children: [
+                                _cardDetailIcon(Icons.calendar_month_rounded, const Color(0xFF3B82F6)),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Text(
+                                    t.dates,
+                                    style: GoogleFonts.plusJakartaSans(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w700,
+                                      color: const Color(0xFF475569),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 16),
                         ],
                         Row(
                           children: [

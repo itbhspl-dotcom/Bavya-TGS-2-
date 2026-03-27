@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'dart:io';
 import 'package:file_picker/file_picker.dart';
+import 'package:path_provider/path_provider.dart';
 import '../services/trip_service.dart';
 import '../services/api_service.dart';
 import '../constants/api_constants.dart';
@@ -20,10 +21,10 @@ class _LocalTravelScreenState extends State<LocalTravelScreen> {
   final TripService _tripService = TripService();
   final ApiService _apiService = ApiService();
 
-  final TextEditingController _purposeController =
-      TextEditingController(text: 'MMU INSPECTION TRAVEL SCHEDULE');
+  final TextEditingController _purposeController = TextEditingController();
   final TextEditingController _projectController = TextEditingController(text: 'General');
   String _baseLocation = 'Vijayawada';
+  String _baseLocationCode = 'VIJ';
   
   String _selectedMonth = DateFormat('yyyy-MM').format(DateTime.now());
   bool _isLoading = false;
@@ -36,7 +37,22 @@ class _LocalTravelScreenState extends State<LocalTravelScreen> {
   @override
   void initState() {
     super.initState();
+    _updatePurposeFromMonth(_selectedMonth);
     _detectManager();
+  }
+
+  void _updatePurposeFromMonth(String yearMonth) {
+    try {
+      final parts = yearMonth.split('-');
+      final year = int.parse(parts[0]);
+      final month = int.parse(parts[1]);
+      final date = DateTime(year, month, 1);
+      final monthAbbr = DateFormat('MMM').format(date).toUpperCase();
+      final yearShort = year.toString().substring(2);
+      _purposeController.text = 'MMU ITS $monthAbbr$yearShort';
+    } catch (e) {
+      _purposeController.text = 'MMU INSPECTION TRAVEL SCHEDULE';
+    }
   }
 
   String _normalizeId(dynamic id) {
@@ -64,8 +80,10 @@ class _LocalTravelScreenState extends State<LocalTravelScreen> {
       );
 
       if (me.isNotEmpty) {
+        final locName = me['office']?['name'] ?? 'Vijayawada';
         setState(() {
-          _baseLocation = me['office']?['name'] ?? 'Vijayawada';
+          _baseLocation = locName;
+          _baseLocationCode = locName.length >= 3 ? locName.substring(0, 3).toUpperCase() : 'VIJ';
         });
         // Auto-fill project from employee profile
         final projectName = me['project']?['name'] ?? '';
@@ -130,6 +148,48 @@ class _LocalTravelScreenState extends State<LocalTravelScreen> {
     }
   }
 
+  String _buildTemplateFilename() {
+    try {
+      final parts = _selectedMonth.split('-');
+      final year = int.parse(parts[0]);
+      final month = int.parse(parts[1]);
+      final date = DateTime(year, month, 1);
+      final monthAbbr = DateFormat('MMM').format(date).toUpperCase();
+      final yearShort = year.toString().substring(2);
+      final project = _projectController.text.isNotEmpty ? _projectController.text : 'GENERAL';
+      return 'ITS-$project-$_baseLocationCode-$monthAbbr$yearShort.xlsx';
+    } catch (_) {
+      return 'ITS-template.xlsx';
+    }
+  }
+
+  Future<void> _downloadTemplate() async {
+    try {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Downloading template...'), duration: Duration(seconds: 2)),
+      );
+      final bytes = await _tripService.downloadBulkTemplate();
+      final directory = await getTemporaryDirectory();
+      final filename = _buildTemplateFilename();
+      final file = File('${directory.path}/$filename');
+      await file.writeAsBytes(bytes);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Template saved: $filename'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Download failed: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
   Future<void> _handleSubmit() async {
     if (!_formKey.currentState!.validate()) return;
     
@@ -166,6 +226,7 @@ class _LocalTravelScreenState extends State<LocalTravelScreen> {
       'travel_mode': 'Car / Jeep / Van',
       'project_code': _projectController.text,
       'consider_as_local': true,
+      if (_reportingManagerId != null) 'reporting_manager': int.tryParse(_reportingManagerId!),
     };
 
     try {
@@ -377,7 +438,12 @@ class _LocalTravelScreenState extends State<LocalTravelScreen> {
                     style: GoogleFonts.plusJakartaSans(
                         fontWeight: FontWeight.w700)));
           }),
-          onChanged: (v) => setState(() => _selectedMonth = v!),
+          onChanged: (v) {
+            if (v != null) {
+              setState(() => _selectedMonth = v);
+              _updatePurposeFromMonth(v);
+            }
+          },
         ),
       ),
     );
@@ -448,8 +514,32 @@ class _LocalTravelScreenState extends State<LocalTravelScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text('Monthly tour plans require a validated bulk upload of daily activities.', style: GoogleFonts.plusJakartaSans(fontSize: 12, color: Colors.blue.shade900, fontWeight: FontWeight.w600)),
-                      const SizedBox(height: 4),
-                      Text('Need the Activity Log Template? You can download it from the Help & Support page.', style: GoogleFonts.plusJakartaSans(fontSize: 11, color: Colors.blue.shade700)),
+                      const SizedBox(height: 8),
+                      GestureDetector(
+                        onTap: _downloadTemplate,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF10B981).withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: const Color(0xFF10B981).withOpacity(0.3)),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.download_rounded, color: Color(0xFF059669), size: 16),
+                              const SizedBox(width: 6),
+                              Flexible(
+                                child: Text(
+                                  'Download ${_buildTemplateFilename()}',
+                                  style: GoogleFonts.plusJakartaSans(fontSize: 11, color: const Color(0xFF059669), fontWeight: FontWeight.w700),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
                     ],
                   ),
                 ),

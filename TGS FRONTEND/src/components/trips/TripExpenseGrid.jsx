@@ -366,13 +366,13 @@ const TripExpenseGrid = ({
         setFlightProviders(HARDCODED_AIRLINES);
         setBusProviders(HARDCODED_BUS_OPERATORS);
         setCabProviders(['Uber', 'Ola', 'Meru', 'Local Agency']);
-        
+
         setTicketStatusOptions([
             { id: 1, status_name: 'Confirmed', is_flight: true, is_train: true, is_bus: true, is_intercity_cab: true },
             { id: 2, status_name: 'Waitlisted', is_flight: false, is_train: true, is_bus: true, is_intercity_cab: false },
             { id: 3, status_name: 'RAC', is_flight: false, is_train: true, is_bus: false, is_intercity_cab: false }
         ]);
-        
+
         setQuotaTypeOptions([
             { id: 1, quota_name: 'General' },
             { id: 2, quota_name: 'Tatkal' },
@@ -385,7 +385,7 @@ const TripExpenseGrid = ({
         setLocalBikeSubTypes(FALLBACK_LOCAL_BIKE_SUBTYPES);
         setLocalAutoSubTypes(FALLBACK_LOCAL_PT_SUBTYPES);
         setLocalProviders(['Ola', 'Uber', 'Rapido', 'Local Vendor']);
-        
+
         setIncidentalTypes(FALLBACK_INCIDENTAL_TYPES);
         setLocalIncidentalTypes(['Parking', 'Toll', 'Puncture', 'Others']);
         setTravelIncidentalTypes(['Porter', 'Luggage', 'Others']);
@@ -2348,11 +2348,20 @@ const TripExpenseGrid = ({
                                     {(row.bills || []).length > 0 && (
                                         <div className="incidental-upload-list">
                                             {row.bills.map((bill, idx) => (
-                                                <div key={idx} className="incidental-upload-item">
+                                                <div key={idx} className="incidental-upload-item" style={{ gap: '8px' }}>
                                                     <button type="button" className="incidental-upload-preview" onClick={() => previewBill(bill)}>
                                                         <FileText size={14} />
                                                         <span>Bill {idx + 1}</span>
                                                     </button>
+                                                    <input
+                                                        type="text"
+                                                        placeholder="Inv #"
+                                                        className="cat-input invoice-input-mini"
+                                                        style={{ width: '60px', padding: '2px 4px', fontSize: '0.65rem', height: '22px', border: '1px solid #cbd5e1', borderRadius: '4px' }}
+                                                        value={invoiceNumbers[idx] || ''}
+                                                        onChange={e => updateIncidentalInvoiceNumber(row.id, idx, e.target.value)}
+                                                        disabled={isLocked}
+                                                    />
                                                     {!isLocked && (
                                                         <button type="button" className="incidental-upload-remove" onClick={() => removeBill(row.id, idx)}>
                                                             <X size={12} />
@@ -2847,11 +2856,20 @@ const TripExpenseGrid = ({
                                     {(row.bills || []).length > 0 && (
                                         <div className="incidental-upload-list">
                                             {row.bills.map((bill, idx) => (
-                                                <div key={idx} className="incidental-upload-item">
+                                                <div key={idx} className="incidental-upload-item" style={{ gap: '8px' }}>
                                                     <button type="button" className="incidental-upload-preview" onClick={() => previewBill(bill)}>
                                                         <FileText size={14} />
                                                         <span>File {idx + 1}</span>
                                                     </button>
+                                                    <input
+                                                        type="text"
+                                                        placeholder="Inv #"
+                                                        className="cat-input invoice-input-mini"
+                                                        style={{ width: '60px', padding: '2px 4px', fontSize: '0.65rem', height: '22px', border: '1px solid #cbd5e1', borderRadius: '4px' }}
+                                                        value={travelInvoiceNumbers[idx] || ''}
+                                                        onChange={e => updateTravelInvoiceNumber(row.id, idx, e.target.value)}
+                                                        disabled={isLocked}
+                                                    />
                                                     {!isLocked && (
                                                         <button type="button" className="incidental-upload-remove" onClick={() => removeBill(row.id, idx)}>
                                                             <X size={12} />
@@ -3178,11 +3196,20 @@ const TripExpenseGrid = ({
                                     {(row.bills || []).length > 0 && (
                                         <div className="incidental-upload-list">
                                             {row.bills.map((bill, idx) => (
-                                                <div key={idx} className="incidental-upload-item">
+                                                <div key={idx} className="incidental-upload-item" style={{ gap: '8px' }}>
                                                     <button type="button" className="incidental-upload-preview" onClick={() => previewBill(bill)}>
                                                         <FileText size={14} />
                                                         <span>Bill {idx + 1}</span>
                                                     </button>
+                                                    <input
+                                                        type="text"
+                                                        placeholder="Inv #"
+                                                        className="cat-input invoice-input-mini"
+                                                        style={{ width: '60px', padding: '2px 4px', fontSize: '0.65rem', height: '22px', border: '1px solid #cbd5e1', borderRadius: '4px' }}
+                                                        value={localInvoiceNumbers[idx] || ''}
+                                                        onChange={e => updateLocalInvoiceNumber(row.id, idx, e.target.value)}
+                                                        disabled={isLocked}
+                                                    />
                                                     {!isLocked && (
                                                         <button type="button" className="incidental-upload-remove" onClick={() => removeBill(row.id, idx)}>
                                                             <X size={12} />
@@ -3376,11 +3403,20 @@ const TripExpenseGrid = ({
                                     {(row.bills || []).length > 0 && (
                                         <div className="incidental-upload-list">
                                             {row.bills.map((bill, idx) => (
-                                                <div key={idx} className="incidental-upload-item">
+                                                <div key={idx} className="incidental-upload-item" style={{ gap: '8px' }}>
                                                     <button type="button" className="incidental-upload-preview" onClick={() => previewBill(bill)}>
                                                         <FileText size={14} />
                                                         <span>Bill {idx + 1}</span>
                                                     </button>
+                                                    <input
+                                                        type="text"
+                                                        placeholder="Inv #"
+                                                        className="cat-input invoice-input-mini"
+                                                        style={{ width: '60px', padding: '2px 4px', fontSize: '0.65rem', height: '22px', border: '1px solid #cbd5e1', borderRadius: '4px' }}
+                                                        value={foodInvoiceNumbers[idx] || ''}
+                                                        onChange={e => updateFoodInvoiceNumber(row.id, idx, e.target.value)}
+                                                        disabled={isLocked}
+                                                    />
                                                     {!isLocked && (
                                                         <button type="button" className="incidental-upload-remove" onClick={() => removeBill(row.id, idx)}>
                                                             <X size={12} />
@@ -3402,10 +3438,10 @@ const TripExpenseGrid = ({
 
     const renderAccommodationCard = (row) => {
         const accommodationInvoiceNumbers = getAccommodationInvoiceNumbers(row);
-// Deleted local fallback
-// Deleted local fallback
-// Deleted local fallback
-// Deleted local fallback
+        // Deleted local fallback
+        // Deleted local fallback
+        // Deleted local fallback
+        // Deleted local fallback
         const numberOfNights = row.details.nights || 0;
         const scheduledCheckInDate = row.details.scheduledCheckInDate || row.details.checkIn || '';
         const scheduledCheckInTime = row.details.scheduledCheckInTime || row.details.checkInTime || '';
@@ -3449,7 +3485,7 @@ const TripExpenseGrid = ({
                                                 <input type="time" className="cat-input" value={scheduledCheckInTime || ''} onChange={e => updateDetails(row.id, 'scheduledCheckInTime', e.target.value)} disabled={isLocked} />
                                             </div>
                                         </div>
-                                        
+
                                         <div className="timeline-arrow"><span>→</span></div>
 
                                         <div className="timeline-group">
@@ -3498,8 +3534,8 @@ const TripExpenseGrid = ({
                             <div className="accommodation-details-section">
                                 {/* 1. Lodging Info */}
                                 <div className="details-box">
-                                    <div className="details-box-head"><span style={{fontSize: '0.7rem', fontWeight: 700, color: '#334155', textTransform: 'uppercase'}}>Lodging Info</span></div>
-                                    <div className="details-box-body" style={{padding: '12px', display: 'flex', flexDirection: 'column', gap: '8px'}}>
+                                    <div className="details-box-head"><span style={{ fontSize: '0.7rem', fontWeight: 700, color: '#334155', textTransform: 'uppercase' }}>Lodging Info</span></div>
+                                    <div className="details-box-body" style={{ padding: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
                                         <div className="input-with-label-mini">
                                             <label>Stay Type *</label>
                                             <select className="cat-input" value={row.details.accomType || ''} onChange={e => updateDetails(row.id, 'accomType', e.target.value)} disabled={isLocked}>
@@ -3522,8 +3558,8 @@ const TripExpenseGrid = ({
 
                                 {/* 2. Booking Details */}
                                 <div className="details-box">
-                                    <div className="details-box-head"><span style={{fontSize: '0.7rem', fontWeight: 700, color: '#334155', textTransform: 'uppercase'}}>Booking Details</span></div>
-                                    <div className="details-box-body" style={{padding: '12px', display: 'flex', flexDirection: 'column', gap: '8px'}}>
+                                    <div className="details-box-head"><span style={{ fontSize: '0.7rem', fontWeight: 700, color: '#334155', textTransform: 'uppercase' }}>Booking Details</span></div>
+                                    <div className="details-box-body" style={{ padding: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
                                         <div className="input-with-label-mini">
                                             <label>Booking Type *</label>
                                             <select className="cat-input" value={row.details.bookingType || ''} onChange={e => updateDetails(row.id, 'bookingType', e.target.value)} disabled={isLocked}>
@@ -3542,8 +3578,8 @@ const TripExpenseGrid = ({
 
                                 {/* 3. Expense & Upload */}
                                 <div className="details-box">
-                                    <div className="details-box-head"><span style={{fontSize: '0.7rem', fontWeight: 700, color: '#334155', textTransform: 'uppercase'}}>Expense & Upload</span></div>
-                                    <div className="details-box-body" style={{padding: '12px', display: 'flex', flexDirection: 'column', gap: '8px'}}>
+                                    <div className="details-box-head"><span style={{ fontSize: '0.7rem', fontWeight: 700, color: '#334155', textTransform: 'uppercase' }}>Expense & Upload</span></div>
+                                    <div className="details-box-body" style={{ padding: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
                                         <div className="input-with-label-mini">
                                             <label>Amount *</label>
                                             <div className="amount-with-currency">
@@ -3561,7 +3597,7 @@ const TripExpenseGrid = ({
                                                 <input type="number" className="cat-input" placeholder="0.00" value={row.details.lateCheckOutCharges || ''} onChange={e => updateDetails(row.id, 'lateCheckOutCharges', e.target.value)} disabled={isLocked} />
                                             </div>
                                         </div>
-                                        
+
                                         <div className="compact-upload-bar" style={{ marginTop: 'auto', paddingTop: '10px', borderTop: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                                             {!isLocked && (
                                                 <label className="incidental-upload-btn" htmlFor={`accom-f-${row.id}`} style={{ padding: '4px 8px', fontSize: '0.75rem', gap: '4px', background: '#f8fafc', border: '1px solid #e2e8f0' }}>
@@ -3577,25 +3613,34 @@ const TripExpenseGrid = ({
                                 </div>
                             </div>
 
-                                    {(row.bills || []).length > 0 && (
-                                        <div className="incidental-upload-list">
-                                            {row.bills.map((bill, idx) => (
-                                                <div key={idx} className="incidental-upload-item">
-                                                    <button type="button" className="incidental-upload-preview" onClick={() => previewBill(bill)}>
-                                                        <FileText size={14} />
-                                                        <span>Bill {idx + 1}</span>
-                                                    </button>
-                                                    {!isLocked && (
-                                                        <button type="button" className="incidental-upload-remove" onClick={() => removeBill(row.id, idx)}>
-                                                            <X size={12} />
-                                                        </button>
-                                                    )}
-                                                </div>
-                                            ))}
+                            {(row.bills || []).length > 0 && (
+                                <div className="incidental-upload-list">
+                                    {row.bills.map((bill, idx) => (
+                                        <div key={idx} className="incidental-upload-item" style={{ gap: '8px' }}>
+                                            <button type="button" className="incidental-upload-preview" onClick={() => previewBill(bill)}>
+                                                <FileText size={14} />
+                                                <span>Bill {idx + 1}</span>
+                                            </button>
+                                            <input
+                                                type="text"
+                                                placeholder="Inv #"
+                                                className="cat-input invoice-input-mini"
+                                                style={{ width: '60px', padding: '2px 4px', fontSize: '0.65rem', height: '22px', border: '1px solid #cbd5e1', borderRadius: '4px' }}
+                                                value={accommodationInvoiceNumbers[idx] || ''}
+                                                onChange={e => updateAccommodationInvoiceNumber(row.id, idx, e.target.value)}
+                                                disabled={isLocked}
+                                            />
+                                            {!isLocked && (
+                                                <button type="button" className="incidental-upload-remove" onClick={() => removeBill(row.id, idx)}>
+                                                    <X size={12} />
+                                                </button>
+                                            )}
                                         </div>
-                                    )}
+                                    ))}
                                 </div>
-                            </div>
+                            )}
+                        </div>
+                    </div>
                 </td>
             </tr>
         );
@@ -4020,17 +4065,30 @@ const TripExpenseGrid = ({
                                                                                 </>
                                                                             )}
                                                                             {(row.bills || []).length > 0 && (
-                                                                                <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                                                                                    {row.bills.map((b, i) => (
-                                                                                        <div key={i} style={{ position: 'relative', display: 'inline-flex', cursor: 'pointer', background: '#e0f2fe', borderRadius: '6px', padding: '4px 8px', alignItems: 'center', gap: '4px', fontSize: '0.7rem', color: '#0369a1', fontWeight: 600 }} onClick={() => previewBill(b)}>
-                                                                                            <FileText size={12} /> Bill {i + 1}
-                                                                                            {!isLocked && (
-                                                                                                <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', padding: 0, lineHeight: 1, marginLeft: '2px' }} onClick={e => { e.stopPropagation(); removeBill(row.id, i); }}>
-                                                                                                    <X size={10} />
-                                                                                                </button>
-                                                                                            )}
-                                                                                        </div>
-                                                                                    ))}
+                                                                                <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
+                                                                                    {row.bills.map((b, i) => {
+                                                                                        const localInvoiceNumbers = getLocalInvoiceNumbers(row);
+                                                                                        return (
+                                                                                            <div key={i} style={{ position: 'relative', display: 'inline-flex', background: '#e0f2fe', borderRadius: '6px', padding: '4px 8px', alignItems: 'center', gap: '6px', color: '#0369a1', fontWeight: 600 }}>
+                                                                                                <div style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.7rem' }} onClick={() => previewBill(b)}>
+                                                                                                    <FileText size={12} /> Bill {i + 1}
+                                                                                                </div>
+                                                                                                <input
+                                                                                                    type="text"
+                                                                                                    placeholder="Inv #"
+                                                                                                    style={{ width: '50px', border: '1px solid #bae6fd', borderRadius: '4px', padding: '0 4px', fontSize: '0.6rem', height: '18px', background: 'white', outline: 'none' }}
+                                                                                                    value={localInvoiceNumbers[i] || ''}
+                                                                                                    onChange={e => updateLocalInvoiceNumber(row.id, i, e.target.value)}
+                                                                                                    disabled={isLocked}
+                                                                                                />
+                                                                                                {!isLocked && (
+                                                                                                    <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', padding: 0, lineHeight: 1, marginLeft: '2px' }} onClick={e => { e.stopPropagation(); removeBill(row.id, i); }}>
+                                                                                                        <X size={10} />
+                                                                                                    </button>
+                                                                                                )}
+                                                                                            </div>
+                                                                                        );
+                                                                                    })}
                                                                                 </div>
                                                                             )}
                                                                         </div>

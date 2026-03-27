@@ -1094,10 +1094,11 @@ const ApprovalInbox = ({ enforceTab = null }) => {
                                                                     <table className="w-full text-xs border-collapse" style={{ minWidth: '1000px' }}>
                                                                         <thead style={{ position: 'sticky', top: 0, zIndex: 10, background: '#f8fafc' }}>
                                                                             <tr className="text-slate-500 border-b">
-                                                                                {batch.data_json && batch.data_json.length > 0 && Object.keys(batch.data_json[0]).filter(k => !k.startsWith('_')).map(key => {
+                                                                                {[...new Set(['date', 'mode', 'vehicle', 'origin_route', 'destination_route', 'start_time', 'reach_time', 'visit_intent', 'remarks', 'odo_start', 'odo_end', ...Object.keys(batch.data_json[0])])].filter(k => !k.startsWith('_') && Object.keys(batch.data_json[0]).includes(k)).map(key => {
                                                                                     const map = {
                                                                                         date: 'Date',
-                                                                                        time: 'Time',
+                                                                                        start_time: 'Start Time',
+                                                                                        reach_time: 'Reach Time',
                                                                                         mode: 'Mode',
                                                                                         origin_route: 'From Location',
                                                                                         destination_route: 'To Location',
@@ -1129,11 +1130,14 @@ const ApprovalInbox = ({ enforceTab = null }) => {
                                                                                 
                                                                                 return (
                                                                                 <tr key={filterIdx} className={isActuallyRejected ? 'bg-rose-50 border-b' : 'hover:bg-slate-50 border-b'}>
-                                                                                    {Object.entries(row).filter(([k]) => !k.startsWith('_')).map(([k, val], vIdx) => (
+                                                                                    {[...new Set(['date', 'mode', 'vehicle', 'origin_route', 'destination_route', 'start_time', 'reach_time', 'visit_intent', 'remarks', 'odo_start', 'odo_end', ...Object.keys(row)])].filter(k => !k.startsWith('_') && Object.keys(row).includes(k)).map((k, vIdx) => {
+                                                                                         const val = row[k];
+                                                                                         return (
                                                                                         <td key={vIdx} className={`p-3 border-b ${isActuallyRejected ? 'text-slate-400 line-through' : 'text-slate-700 font-medium'}`}>
                                                                                             {String(val || '-')}
                                                                                         </td>
-                                                                                    ))}
+                                                                                                                                                                             );
+                                                                                     })}
                                                                                     <td className="p-3 border-b">
                                                                                         {row._status === 'Rejected' ? (
                                                                                             <div className="flex items-center gap-1.5 text-rose-600 font-bold bg-rose-50 px-2 py-1 rounded-md border border-rose-100 w-fit">

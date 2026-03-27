@@ -3392,10 +3392,11 @@ const TravelExpenseGrid = ({
                                     <thead>
                                         <tr style={{ background: '#f1f5f9' }}>
                                             <th style={{ padding: '16px', fontSize: '0.75rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase', width: '16%' }}>Date</th>
-                                            <th style={{ padding: '16px', fontSize: '0.75rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase', width: '28%' }}>Route Correction</th>
-                                            <th style={{ padding: '16px', fontSize: '0.75rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase', width: '18%' }}>Vehicle Info</th>
-                                            <th style={{ padding: '16px', fontSize: '0.75rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase', width: '14%' }}>Odo/Distance</th>
-                                            <th style={{ padding: '16px', fontSize: '0.75rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase', width: '24%' }}>Rejection Reason</th>
+                                            <th style={{ padding: '16px', fontSize: '0.75rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase', width: '22%' }}>Route Correction</th>
+                                            <th style={{ padding: '16px', fontSize: '0.75rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase', width: '16%' }}>Vehicle Info</th>
+                                            <th style={{ padding: '16px', fontSize: '0.75rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase', width: '12%' }}>Time</th>
+                                            <th style={{ padding: '16px', fontSize: '0.75rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase', width: '12%' }}>Odo/Distance</th>
+                                            <th style={{ padding: '16px', fontSize: '0.75rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase', width: '22%' }}>Rejection Reason</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -3427,6 +3428,18 @@ const TravelExpenseGrid = ({
                                                                 {row.mode || 'N/A'}
                                                             </div>
                                                             <div style={{ fontSize: '0.72rem', color: '#64748b', background: '#f1f5f9', padding: '4px 8px', borderRadius: '4px', textTransform: 'uppercase', fontWeight: 600 }}>Purpose: {row.visit_intent || 'Field Visit'}</div>
+                                                        </div>
+                                                    </td>
+                                                    <td style={{ padding: '16px 20px', verticalAlign: 'top' }}>
+                                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                                            <div style={{ position: 'relative' }}>
+                                                                <span style={{ fontSize: '0.6rem', position: 'absolute', top: '-4px', left: '6px', background: 'white', padding: '0 2px', color: '#94a3b8' }}>START</span>
+                                                                <input type="time" value={row.start_time} onChange={e => updateResubmitRow(idx, 'start_time', e.target.value)} style={{ width: '100%', padding: '8px 6px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.8rem' }} />
+                                                            </div>
+                                                            <div style={{ position: 'relative' }}>
+                                                                <span style={{ fontSize: '0.6rem', position: 'absolute', top: '-4px', left: '6px', background: 'white', padding: '0 2px', color: '#94a3b8' }}>REACH</span>
+                                                                <input type="time" value={row.reach_time} onChange={e => updateResubmitRow(idx, 'reach_time', e.target.value)} style={{ width: '100%', padding: '8px 6px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.8rem' }} />
+                                                            </div>
                                                         </div>
                                                     </td>
                                                     <td style={{ padding: '16px 20px', verticalAlign: 'top' }}>

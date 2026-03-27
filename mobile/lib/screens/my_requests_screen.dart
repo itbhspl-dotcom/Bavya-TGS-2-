@@ -26,15 +26,16 @@ class _MyRequestsScreenState extends State<MyRequestsScreen> with SingleTickerPr
   List<Map<String, dynamic>> _trips = [];
   List<Map<String, dynamic>> _advances = [];
   List<Map<String, dynamic>> _claims = [];
-  
-  String _viewMode = 'active'; // 'active' or 'historical'
+  List<Map<String, dynamic>> _bulkBatches = [];
+
+  String _viewMode = 'active';
   bool _isLoading = true;
   late TabController _tabController;
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 4, vsync: this);
     if (widget.enforceTab != null) {
       _viewMode = widget.enforceTab == 0 ? 'active' : 'historical';
     }
@@ -100,6 +101,30 @@ class _MyRequestsScreenState extends State<MyRequestsScreen> with SingleTickerPr
       }
       _claims = claimsList;
 
+      // 4. Fetch Monthly Tour Plan (Bulk Batches)
+      try {
+        final batchesData = await _tripService.fetchBulkActivities();
+        _bulkBatches = batchesData.map((b) {
+          final rows = (b['data_json'] as List?) ?? [];
+          final entryCount = rows.where((r) {
+            final d = r['date']?.toString() ?? '';
+            return !d.toLowerCase().contains('instruc');
+          }).length;
+          return {
+            'id': b['id']?.toString() ?? '',
+            'title': b['file_name']?.toString() ?? 'Monthly Tour Plan',
+            'date': b['created_at']?.toString().split('T').first ?? '',
+            'amount': 0.0,
+            'status': b['status']?.toString() ?? 'Submitted',
+            'type': 'bulk',
+            'entry_count': entryCount,
+            'data_json': rows,
+          };
+        }).toList();
+      } catch (_) {
+        _bulkBatches = [];
+      }
+
       setState(() => _isLoading = false);
     } catch (e) {
       debugPrint('Error fetching requests: $e');
@@ -143,6 +168,7 @@ class _MyRequestsScreenState extends State<MyRequestsScreen> with SingleTickerPr
     final activeTrips = _filterData(_trips);
     final activeAdvances = _filterData(_advances);
     final activeClaims = _filterData(_claims);
+    final activeBatches = _filterData(_bulkBatches);
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
@@ -165,7 +191,7 @@ class _MyRequestsScreenState extends State<MyRequestsScreen> with SingleTickerPr
             children: [
               if (!widget.hideHeader) _buildCustomHeader(),
               if (widget.enforceTab == null) _buildFilterSection(),
-              _buildTabBarSection(activeTrips.length, activeAdvances.length, activeClaims.length),
+              _buildTabBarSection(activeTrips.length, activeAdvances.length, activeClaims.length, activeBatches.length),
               Expanded(
                 child: _isLoading 
                   ? const Center(child: CircularProgressIndicator(color: Color(0xFFBB0633)))
@@ -175,6 +201,7 @@ class _MyRequestsScreenState extends State<MyRequestsScreen> with SingleTickerPr
                         _buildColumn(activeTrips),
                         _buildColumn(activeAdvances),
                         _buildColumn(activeClaims),
+                        _buildBulkBatchColumn(activeBatches),
                       ],
                     ),
               ),
@@ -251,7 +278,7 @@ class _MyRequestsScreenState extends State<MyRequestsScreen> with SingleTickerPr
     );
   }
 
-  Widget _buildTabBarSection(int tCount, int aCount, int cCount) {
+  Widget _buildTabBarSection(int tCount, int aCount, int cCount, int bCount) {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 20),
       decoration: BoxDecoration(
@@ -267,11 +294,14 @@ class _MyRequestsScreenState extends State<MyRequestsScreen> with SingleTickerPr
         indicatorWeight: 3,
         indicatorPadding: const EdgeInsets.symmetric(horizontal: 16),
         dividerColor: Colors.transparent,
-        labelStyle: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w900, fontSize: 12, letterSpacing: 0.3),
+        labelStyle: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w900, fontSize: 10, letterSpacing: 0.3),
+        isScrollable: true,
+        tabAlignment: TabAlignment.start,
         tabs: [
           Tab(text: 'TRIPS ($tCount)'),
           Tab(text: 'ADV ($aCount)'),
           Tab(text: 'CLAIMS ($cCount)'),
+          Tab(text: 'TOUR PLAN ($bCount)'),
         ],
       ),
     );
@@ -439,6 +469,111 @@ class _MyRequestsScreenState extends State<MyRequestsScreen> with SingleTickerPr
               ],
             ),
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBulkBatchColumn(List<Map<String, dynamic>> items) {
+    if (items.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: const BoxDecoration(color: Color(0xFFF1F5F9), shape: BoxShape.circle),
+              child: const Icon(Icons.calendar_month_outlined, size: 40, color: Color(0xFF94A3B8)),
+            ),
+            const SizedBox(height: 20),
+            Text('No Tour Plans', style: GoogleFonts.plusJakartaSans(fontSize: 16, color: const Color(0xFF0F172A), fontWeight: FontWeight.w900)),
+            const SizedBox(height: 8),
+            Text('No Monthly Tour Plan submissions found.', style: GoogleFonts.plusJakartaSans(color: const Color(0xFF64748B), fontWeight: FontWeight.w600, fontSize: 13), textAlign: TextAlign.center),
+          ],
+        ),
+      );
+    }
+    return RefreshIndicator(
+      onRefresh: _fetchData,
+      color: const Color(0xFFBB0633),
+      child: ListView.builder(
+        padding: const EdgeInsets.all(20),
+        itemCount: items.length,
+        itemBuilder: (context, index) => _buildBulkBatchCard(items[index]),
+      ),
+    );
+  }
+
+  Widget _buildBulkBatchCard(Map<String, dynamic> batch) {
+    final statusColor = _getStatusColor(batch['status']);
+    final entryCount = batch['entry_count'] ?? 0;
+    final status = batch['status']?.toString() ?? 'Submitted';
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: const Color(0xFFF1F5F9)),
+        boxShadow: [BoxShadow(color: const Color(0xFF0F172A).withOpacity(0.03), blurRadius: 15, offset: const Offset(0, 8))],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(color: const Color(0xFFFFF1F2), borderRadius: BorderRadius.circular(10)),
+                      child: const Icon(Icons.calendar_month_rounded, size: 16, color: Color(0xFFBB0633)),
+                    ),
+                    const SizedBox(width: 10),
+                    Text('Monthly Tour Plan', style: GoogleFonts.plusJakartaSans(fontSize: 10, fontWeight: FontWeight.w800, color: const Color(0xFF94A3B8), letterSpacing: 0.5)),
+                  ],
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(color: statusColor.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
+                  child: Text(status.toUpperCase(), style: GoogleFonts.plusJakartaSans(fontSize: 9, fontWeight: FontWeight.w900, color: statusColor, letterSpacing: 1.0)),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            Text(
+              batch['title'],
+              style: GoogleFonts.plusJakartaSans(fontSize: 15, fontWeight: FontWeight.w900, color: const Color(0xFF0F172A), letterSpacing: -0.3),
+              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: 10),
+            const Divider(height: 1, color: Color(0xFFF1F5F9)),
+            const SizedBox(height: 10),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(color: const Color(0xFFF1F5F9), borderRadius: BorderRadius.circular(8)),
+                      child: const Icon(Icons.calendar_today_rounded, size: 12, color: Color(0xFF64748B)),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(batch['date'], style: GoogleFonts.plusJakartaSans(fontSize: 13, color: const Color(0xFF64748B), fontWeight: FontWeight.w700)),
+                  ],
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(color: const Color(0xFF0F172A), borderRadius: BorderRadius.circular(10)),
+                  child: Text('$entryCount entries', style: GoogleFonts.plusJakartaSans(fontSize: 11, fontWeight: FontWeight.w800, color: Colors.white)),
+                ),
+              ],
+            ),
+          ],
         ),
       ),
     );

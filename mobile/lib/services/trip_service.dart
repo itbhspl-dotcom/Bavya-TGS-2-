@@ -590,10 +590,10 @@ class TripService {
     return [];
   }
 
-  Future<void> handleBulkBatchAction(int batchId, String action) async {
+  Future<void> handleBulkBatchAction(String batchId, String action, {Map<String, dynamic> extraData = const {}}) async {
     await _apiService.post(
       '${ApiConstants.baseUrl}/api/bulk-activities/$batchId/$action/',
-      body: {},
+      body: extraData,
       includeAuth: true,
     );
   }

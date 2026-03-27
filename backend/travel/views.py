@@ -2052,12 +2052,13 @@ class BulkActivityBatchViewSet(viewsets.ModelViewSet):
         BORDER        = Border(left=thin, right=thin, top=thin, bottom=thin)
 
         # ── Column layout ────────────────────────────────────────────────────
-        # A=Date  B=Time  C=From Location  D=To Location  E=Purpose
+        # A=Date  B=From Location  C=Start Time  D=To Location  E=Reach Time  F=Purpose
         columns = [
             ("Date",          16, CENTER),
-            ("Time",          14, CENTER),
             ("From Location", 28, LEFT),
+            ("Start Time",    14, CENTER),
             ("To Location",   28, LEFT),
+            ("Reach Time",    14, CENTER),
             ("Purpose",       40, LEFT),
         ]
 
@@ -2072,9 +2073,10 @@ class BulkActivityBatchViewSet(viewsets.ModelViewSet):
             ws.column_dimensions[get_column_letter(col_idx)].width = width
 
         # Row 2 – Instructional note (merged across all columns)
-        ws.merge_cells("A2:E2")
+        ws.merge_cells("A2:F2")
         note_cell = ws.cell(row=2, column=1,
-            value="📋  Instructions: Date must be ≥ today  |  If Date = Today, Time must be > current time (HH:MM)  |  "
+            value="📋  Instructions: Date must be ≥ today  |  Start Time & Reach Time must be HH:MM (24h)  |"
+                  " Reach Time must be > Start Time | "
                   "Choose From/To Location from the dropdown  |  Purpose is free text")
         note_cell.font      = NOTE_FONT
         note_cell.fill      = NOTE_FILL
@@ -2097,9 +2099,10 @@ class BulkActivityBatchViewSet(viewsets.ModelViewSet):
         # Ensure Row 3 sample data is treated as date/time
         sample_data = [
             today_obj,
-            now_rounded.time(), 
             locations[0] if locations else "Office",
+            now_rounded.time(), 
             locations[1] if len(locations) > 1 else "Client Site",
+            (now_rounded + datetime.timedelta(hours=1)).time(),
             "Site Inspection / Field Visit"
         ]
         ws.row_dimensions[3].height = 20
@@ -2115,14 +2118,14 @@ class BulkActivityBatchViewSet(viewsets.ModelViewSet):
         # Rows 4-103 – Empty data rows (100 rows)
         for row in range(4, 104):
             ws.row_dimensions[row].height = 20
-            for col_idx in range(1, 6):
+            for col_idx in range(1, 7):
                 cell = ws.cell(row=row, column=col_idx)
                 cell.font      = DATA_FONT
                 cell.alignment = columns[col_idx - 1][2]
                 cell.border    = BORDER
-                # Column A = Date, Column B = Time
+                # Column A = Date, Column C = Start Time, Column E = Reach Time
                 if col_idx == 1: cell.number_format = 'YYYY-MM-DD'
-                if col_idx == 2: cell.number_format = 'HH:MM'
+                if col_idx in [3, 5]: cell.number_format = 'HH:MM'
 
         DATA_ROWS = "3:103"   # applies to sample + 100 blank rows
 
@@ -2145,23 +2148,42 @@ class BulkActivityBatchViewSet(viewsets.ModelViewSet):
         dv_date.sqref = "A3:A103"   # Column A
 
         # -- Updated formula: 5-min increments AND (if Date=Today, Time>Now; else Date>Today) --
-        time_formula = '=AND(MOD(ROUND(B3*1440,0),5)=0, IF(A3=TODAY(), B3>MOD(NOW(),1), A3>TODAY()))'
+        # Now column C
+        start_time_formula = '=AND(MOD(ROUND(C3*1440,0),5)=0, IF(A3=TODAY(), C3>MOD(NOW(),1), A3>TODAY()))'
         
-        dv_time = DataValidation(
+        dv_start_time = DataValidation(
             type="custom",
-            formula1=time_formula,
+            formula1=start_time_formula,
             showDropDown=False,
             showErrorMessage=True,
-            errorTitle="Invalid Time",
-            error="Time must be a multiple of 5 minutes. If selected date is today, time must be > current time.",
+            errorTitle="Invalid Start Time",
+            error="Start Time must be a multiple of 5 minutes. If selected date is today, time must be > current time.",
             showInputMessage=True,
-            promptTitle="Time (HH:MM)",
+            promptTitle="Start Time (HH:MM)",
             prompt="Enter time in HH:MM (24h). If date is today, it must be > current time. Must be a multiple of 5 minutes."
         )
-        ws.add_data_validation(dv_time)
-        dv_time.sqref = "B3:B103"   # Column B
+        ws.add_data_validation(dv_start_time)
+        dv_start_time.sqref = "C3:C103"   # Column C
+
+        # -- Reach Time Validation: Multiple of 5 mins AND Reach Time > Start Time --
+        # Now column E, compared with C
+        reach_time_formula = '=AND(MOD(ROUND(E3*1440,0),5)=0, E3>C3)'
+        dv_reach_time = DataValidation(
+            type="custom",
+            formula1=reach_time_formula,
+            showDropDown=False,
+            showErrorMessage=True,
+            errorTitle="Invalid Reach Time",
+            error="Reach Time must be a multiple of 5 minutes and must be GREATER than Start Time.",
+            showInputMessage=True,
+            promptTitle="Reach Time (HH:MM)",
+            prompt="Enter time in HH:MM (24h). Must be > Start Time and a multiple of 5 minutes."
+        )
+        ws.add_data_validation(dv_reach_time)
+        dv_reach_time.sqref = "E3:E103"   # Column E
 
         # ── Validation 3: From Location dropdown ─────────────────────────────
+        # Now column B
         dv_from = DataValidation(
             type="list",
             formula1=f'_Locations!$A$1:$A${len(locations)}',
@@ -2174,9 +2196,10 @@ class BulkActivityBatchViewSet(viewsets.ModelViewSet):
             prompt="Select the starting location from the dropdown."
         )
         ws.add_data_validation(dv_from)
-        dv_from.sqref = "C3:C103"   # Column C
+        dv_from.sqref = "B3:B103"   # Column B
 
         # ── Validation 4: To Location dropdown ───────────────────────────────
+        # Now column D
         dv_to = DataValidation(
             type="list",
             formula1=f'_Locations!$A$1:$A${len(locations)}',
@@ -2191,12 +2214,11 @@ class BulkActivityBatchViewSet(viewsets.ModelViewSet):
         ws.add_data_validation(dv_to)
         dv_to.sqref = "D3:D103"   # Column D
 
-        # ── Conditional Formatting for Duplicate Locations ───────────────────
-        # Highlight Red if From == To
+        # Highlight Red if From == To (B and D)
         from openpyxl.styles import PatternFill # type: ignore
         red_fill = PatternFill(start_color='FEE2E2', end_color='FEE2E2', fill_type='solid')
-        ws.conditional_formatting.add("C3:D103",
-            openpyxl.formatting.rule.FormulaRule(formula=["=$C3=$D3"], stopIfTrue=True, fill=red_fill))
+        ws.conditional_formatting.add("B3:D103",
+            openpyxl.formatting.rule.FormulaRule(formula=["=$B3=$D3"], stopIfTrue=True, fill=red_fill))
 
 
         # Column E (Purpose) – no list validation, free text; just an input hint
@@ -2212,7 +2234,7 @@ class BulkActivityBatchViewSet(viewsets.ModelViewSet):
             prompt="Briefly describe the reason for this visit (e.g. Site Inspection, Client Meeting)."
         )
         ws.add_data_validation(dv_purpose)
-        dv_purpose.sqref = "E3:E103"   # Column E
+        dv_purpose.sqref = "F3:F103"   # Column F
 
         # ── Freeze panes below header + note rows ────────────────────────────
         ws.freeze_panes = "A3"
@@ -2272,17 +2294,29 @@ class BulkActivityBatchViewSet(viewsets.ModelViewSet):
                     if 'instruc' in date_val.lower(): continue
                     if len(str(date_val)) > 10: date_val = str(date_val)[:10] # type: ignore
 
-                    time_raw = row.get('Time', '')
-                    time_str = ''
-                    if time_raw and str(time_raw).strip() not in ('', 'nan', 'NaT'):
-                        time_str = str(time_raw).strip()
+                    start_time_raw = row.get('Start Time', row.get('Time', ''))
+                    start_time_str = '09:00'
+                    if start_time_raw and str(start_time_raw).strip() not in ('', 'nan', 'NaT'):
+                        start_time_str = str(start_time_raw).strip()
                         try:
-                            frac = float(time_str)
+                            frac = float(start_time_str)
                             if 0 <= frac < 1:
                                 total_secs = int(frac * 86400)
-                                time_str = f"{total_secs // 3600:02d}:{(total_secs % 3600) // 60:02d}"
+                                start_time_str = f"{total_secs // 3600:02d}:{(total_secs % 3600) // 60:02d}"
                         except (ValueError, TypeError): pass
-                        time_str = ':'.join(str(time_str).split(':')[:2]) # type: ignore
+                        start_time_str = ':'.join(str(start_time_str).split(':')[:2]) # type: ignore
+
+                    reach_time_raw = row.get('Reach Time', row.get('End Time', ''))
+                    reach_time_str = '18:00'
+                    if reach_time_raw and str(reach_time_raw).strip() not in ('', 'nan', 'NaT'):
+                        reach_time_str = str(reach_time_raw).strip()
+                        try:
+                            frac = float(reach_time_str)
+                            if 0 <= frac < 1:
+                                total_secs = int(frac * 86400)
+                                reach_time_str = f"{total_secs // 3600:02d}:{(total_secs % 3600) // 60:02d}"
+                        except (ValueError, TypeError): pass
+                        reach_time_str = ':'.join(str(reach_time_str).split(':')[:2]) # type: ignore
 
                     origin = str(row.get('From Location', row.get('from location', ''))).strip()
                     destination = str(row.get('To Location', row.get('to location', ''))).strip()
@@ -2290,7 +2324,7 @@ class BulkActivityBatchViewSet(viewsets.ModelViewSet):
                         raise Exception(f"Row {index + 3}: From Location and To Location cannot be the same.")
 
                     rows.append({
-                        "date": date_val, "time": time_str, "mode": "Bike",
+                        "date": date_val, "start_time": start_time_str, "reach_time": reach_time_str, "mode": "Bike",
                         "origin_route": origin, "destination_route": destination,
                         "vehicle": "Own Bike", "visit_intent": str(row.get('Purpose', row.get('purpose', '')))
                     })
@@ -2512,8 +2546,8 @@ class BulkActivityBatchViewSet(viewsets.ModelViewSet):
                 "odoEnd": row.get('odo_end', 0),
                 "time": {
                     "boardingDate": clean_date,
-                    "boardingTime": "09:00",
-                    "actualTime": "18:00"
+                    "boardingTime": row.get('start_time', '09:00'),
+                    "actualTime": row.get('reach_time', '18:00')
                 }
             }
             

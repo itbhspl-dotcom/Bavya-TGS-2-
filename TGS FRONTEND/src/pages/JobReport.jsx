@@ -150,7 +150,7 @@ const JobReport = () => {
 
 
     const renderBatchData = (batch) => {
-        const allowedKeys = ['date', 'time', 'origin_route', 'destination_route', 'visit_intent', 'mode', 'vehicle', '_status', '_remarks'];
+        const allowedKeys = ['date', 'start_time', 'reach_time', 'time', 'origin_route', 'destination_route', 'visit_intent', 'mode', 'vehicle', '_status', '_remarks'];
         const rows = batch.data_json || [];
         const headerKeys = rows.length > 0
             ? Object.keys(rows[0]).filter(k => allowedKeys.includes(k.toLowerCase()))
