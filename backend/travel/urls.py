@@ -6,14 +6,12 @@ from .views import (
     ApprovalsView, ApprovalCountView, TripBookingSearchView, DisputeViewSet,
     PolicyDocumentViewSet, TripSettlementView, CFOWarRoomView, BulkActivityBatchViewSet, JobReportViewSet,
     TripTrackingView, TeamLiveTrackingView,
-    TravelModeMasterViewSet, BookingTypeMasterViewSet, AirlineMasterViewSet,
-    FlightClassMasterSerializer, FlightClassMasterViewSet, TrainClassMasterViewSet, BusOperatorMasterViewSet, BusTypeMasterViewSet,
-    IntercityCabVehicleMasterViewSet, TravelProviderMasterViewSet,
-    TrainProviderMasterViewSet, BusProviderMasterViewSet, IntercityCabProviderMasterViewSet,
-    LocalTravelModeMasterViewSet, LocalCarSubTypeMasterViewSet, LocalBikeSubTypeMasterViewSet,
-    LocalProviderMasterViewSet, StayTypeMasterViewSet, RoomTypeMasterViewSet,
-    MealCategoryMasterViewSet, MealTypeMasterViewSet, IncidentalTypeMasterViewSet,
-    CustomMasterDefinitionViewSet, CustomMasterValueViewSet, MasterModuleViewSet
+    TravelModeMasterViewSet, BookingTypeMasterViewSet, OperatorMasterViewSet, TravelClassMasterViewSet,
+    VehicleMasterViewSet, ProviderMasterViewSet, TicketStatusMasterViewSet, QuotaTypeMasterViewSet,
+    LocalTravelModeMasterViewSet, LocalProviderMasterViewSet, LocalSubTypeMasterViewSet,
+    StayTypeMasterViewSet, RoomTypeMasterViewSet, StayBookingTypeMasterViewSet, StayBookingSourceMasterViewSet,
+    MealCategoryMasterViewSet, MealTypeMasterViewSet, MealSourceMasterViewSet, MealProviderMasterViewSet,
+    IncidentalTypeMasterViewSet, CustomMasterDefinitionViewSet, CustomMasterValueViewSet, MasterModuleViewSet
 )
 from .views_export import ExpenseStatementPDFView, ExpenseStatementExcelView
 
@@ -30,30 +28,29 @@ router.register(r'job-reports', JobReportViewSet)
 # Master route registers (Travel)
 router.register(r'travel-mode-masters', TravelModeMasterViewSet)
 router.register(r'booking-type-masters', BookingTypeMasterViewSet)
-router.register(r'airline-masters', AirlineMasterViewSet)
-router.register(r'flight-class-masters', FlightClassMasterViewSet)
-router.register(r'train-class-masters', TrainClassMasterViewSet)
-router.register(r'bus-operator-masters', BusOperatorMasterViewSet)
-router.register(r'bus-type-masters', BusTypeMasterViewSet)
-router.register(r'intercity-cab-vehicle-masters', IntercityCabVehicleMasterViewSet)
-router.register(r'travel-provider-masters', TravelProviderMasterViewSet)
-router.register(r'train-provider-masters', TrainProviderMasterViewSet)
-router.register(r'bus-provider-masters', BusProviderMasterViewSet)
-router.register(r'intercity-cab-provider-masters', IntercityCabProviderMasterViewSet)
+router.register(r'operator-masters', OperatorMasterViewSet)
+router.register(r'travel-class-masters', TravelClassMasterViewSet)
+router.register(r'vehicle-masters', VehicleMasterViewSet)
+router.register(r'provider-masters', ProviderMasterViewSet)
+router.register(r'ticket-status-masters', TicketStatusMasterViewSet)
+router.register(r'quota-type-masters', QuotaTypeMasterViewSet)
 
 # Master route registers (Local)
 router.register(r'local-travel-mode-masters', LocalTravelModeMasterViewSet)
-router.register(r'local-car-subtype-masters', LocalCarSubTypeMasterViewSet)
-router.register(r'local-bike-subtype-masters', LocalBikeSubTypeMasterViewSet)
 router.register(r'local-provider-masters', LocalProviderMasterViewSet)
+router.register(r'local-sub-type-masters', LocalSubTypeMasterViewSet)
 
 # Master route registers (Stay)
 router.register(r'stay-type-masters', StayTypeMasterViewSet)
 router.register(r'room-type-masters', RoomTypeMasterViewSet)
+router.register(r'stay-booking-type-masters', StayBookingTypeMasterViewSet)
+router.register(r'stay-booking-source-masters', StayBookingSourceMasterViewSet)
 
 # Master route registers (Food)
 router.register(r'meal-category-masters', MealCategoryMasterViewSet)
 router.register(r'meal-type-masters', MealTypeMasterViewSet)
+router.register(r'meal-source-masters', MealSourceMasterViewSet)
+router.register(r'meal-provider-masters', MealProviderMasterViewSet)
 
 # Master route registers (Incidental)
 router.register(r'incidental-type-masters', IncidentalTypeMasterViewSet)

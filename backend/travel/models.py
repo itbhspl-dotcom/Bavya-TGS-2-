@@ -520,45 +520,48 @@ class BookingTypeMaster(SoftDeleteModel):
     booking_type = models.CharField(max_length=100, unique=True)
     status = models.BooleanField(default=True)
 
-class AirlineMaster(SoftDeleteModel):
-    airline_name = models.CharField(max_length=100, unique=True)
-    airline_code = models.CharField(max_length=50, blank=True, null=True, unique=True)
-    status = models.BooleanField(default=True)
-
-class FlightClassMaster(SoftDeleteModel):
-    class_name = models.CharField(max_length=100, unique=True)
-    status = models.BooleanField(default=True)
-
-class TrainClassMaster(SoftDeleteModel):
-    class_name = models.CharField(max_length=100, unique=True)
-    status = models.BooleanField(default=True)
-
-class BusOperatorMaster(SoftDeleteModel):
+class OperatorMaster(SoftDeleteModel):
     operator_name = models.CharField(max_length=100, unique=True)
+    is_flight = models.BooleanField(default=False)
+    is_train = models.BooleanField(default=False)
+    is_bus = models.BooleanField(default=False)
+    key = models.CharField(max_length=100, unique=True, null=True, blank=True)
     status = models.BooleanField(default=True)
 
-class BusTypeMaster(SoftDeleteModel):
-    bus_type = models.CharField(max_length=100, unique=True)
+class TravelClassMaster(SoftDeleteModel):
+    class_name = models.CharField(max_length=100, unique=True)
+    is_flight = models.BooleanField(default=False)
+    is_train = models.BooleanField(default=False)
+    is_bus = models.BooleanField(default=False)
+    key = models.CharField(max_length=100, unique=True, null=True, blank=True)
     status = models.BooleanField(default=True)
 
-class IntercityCabVehicleMaster(SoftDeleteModel):
-    vehicle_type = models.CharField(max_length=100, unique=True)
+class VehicleMaster(SoftDeleteModel):
+    vehicle_name = models.CharField(max_length=100, unique=True)
+    is_bus = models.BooleanField(default=False)
+    is_intercity_cab = models.BooleanField(default=False)
+    key = models.CharField(max_length=100, unique=True, null=True, blank=True)
     status = models.BooleanField(default=True)
 
-class TravelProviderMaster(SoftDeleteModel):
+class ProviderMaster(SoftDeleteModel):
     provider_name = models.CharField(max_length=100, unique=True)
+    is_flight = models.BooleanField(default=False)
+    is_train = models.BooleanField(default=False)
+    is_bus = models.BooleanField(default=False)
+    is_intercity_cab = models.BooleanField(default=False)
+    key = models.CharField(max_length=100, null=True, blank=True)
     status = models.BooleanField(default=True)
 
-class TrainProviderMaster(SoftDeleteModel):
-    provider_name = models.CharField(max_length=100, unique=True)
+class TicketStatusMaster(SoftDeleteModel):
+    status_name = models.CharField(max_length=100, unique=True)
+    is_flight = models.BooleanField(default=False)
+    is_train = models.BooleanField(default=False)
+    is_bus = models.BooleanField(default=False)
+    is_intercity_cab = models.BooleanField(default=False)
     status = models.BooleanField(default=True)
 
-class BusProviderMaster(SoftDeleteModel):
-    provider_name = models.CharField(max_length=100, unique=True)
-    status = models.BooleanField(default=True)
-
-class IntercityCabProviderMaster(SoftDeleteModel):
-    provider_name = models.CharField(max_length=100, unique=True)
+class QuotaTypeMaster(SoftDeleteModel):
+    quota_name = models.CharField(max_length=100, unique=True)
     status = models.BooleanField(default=True)
 
 # --- MASTER TABLES (LOCAL CONVEYANCE MODULE) ---
@@ -567,16 +570,22 @@ class LocalTravelModeMaster(SoftDeleteModel):
     mode_name = models.CharField(max_length=100, unique=True)
     status = models.BooleanField(default=True)
 
-class LocalCarSubTypeMaster(SoftDeleteModel):
-    sub_type = models.CharField(max_length=100, unique=True)
-    status = models.BooleanField(default=True)
-
-class LocalBikeSubTypeMaster(SoftDeleteModel):
-    sub_type = models.CharField(max_length=100, unique=True)
-    status = models.BooleanField(default=True)
-
 class LocalProviderMaster(SoftDeleteModel):
     provider_name = models.CharField(max_length=100, unique=True)
+    is_car = models.BooleanField(default=False)
+    is_bike = models.BooleanField(default=False)
+    is_auto = models.BooleanField(default=False)
+    is_bus = models.BooleanField(default=False)
+    is_metro = models.BooleanField(default=False)
+    key = models.CharField(max_length=100, null=True, blank=True)
+    status = models.BooleanField(default=True)
+
+class LocalSubTypeMaster(SoftDeleteModel):
+    sub_type = models.CharField(max_length=100, unique=True)
+    is_car = models.BooleanField(default=False)
+    is_bike = models.BooleanField(default=False)
+    is_auto = models.BooleanField(default=False)
+    key = models.CharField(max_length=100, unique=True, null=True, blank=True)
     status = models.BooleanField(default=True)
 
 # --- MASTER TABLES (STAY & LODGING MODULE) ---
@@ -589,6 +598,14 @@ class RoomTypeMaster(SoftDeleteModel):
     room_type = models.CharField(max_length=100, unique=True)
     status = models.BooleanField(default=True)
 
+class StayBookingTypeMaster(SoftDeleteModel):
+    booking_type = models.CharField(max_length=100, unique=True)
+    status = models.BooleanField(default=True)
+
+class StayBookingSourceMaster(SoftDeleteModel):
+    source_name = models.CharField(max_length=100, unique=True)
+    status = models.BooleanField(default=True)
+
 # --- MASTER TABLES (FOOD & REFRESHMENTS MODULE) ---
 
 class MealCategoryMaster(SoftDeleteModel):
@@ -597,6 +614,14 @@ class MealCategoryMaster(SoftDeleteModel):
 
 class MealTypeMaster(SoftDeleteModel):
     meal_type = models.CharField(max_length=100, unique=True)
+    status = models.BooleanField(default=True)
+
+class MealSourceMaster(SoftDeleteModel):
+    source_name = models.CharField(max_length=100, unique=True)
+    status = models.BooleanField(default=True)
+
+class MealProviderMaster(SoftDeleteModel):
+    provider_name = models.CharField(max_length=100, unique=True)
     status = models.BooleanField(default=True)
 
 # --- MASTER TABLES (INCIDENTAL MODULE) ---
@@ -609,12 +634,6 @@ class IncidentalTypeMaster(SoftDeleteModel):
     ]
     expense_type = models.CharField(max_length=100, unique=True)
     category = models.CharField(max_length=30, choices=CATEGORY_CHOICES, default='travel_incidental')
-    status = models.BooleanField(default=True)
-
-# --- MASTER TABLES (INCIDENTAL MODULE) ---
-
-class IncidentalTypeMaster(SoftDeleteModel):
-    expense_type = models.CharField(max_length=100, unique=True)
     status = models.BooleanField(default=True)
 
 # --- DYNAMIC MASTER SYSTEM ---

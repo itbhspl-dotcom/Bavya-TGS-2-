@@ -1563,11 +1563,11 @@ const TravelExpenseGrid = ({
     const CategoryTable = ({ nature, title, icon }) => {
         const categoryRows = (() => {
             let filtered = displayRows.filter(r => r.nature === nature);
-            
+
             if (nature === 'Local Travel') {
                 const limit = new Date();
                 const now = new Date();
-                
+
                 if (dateFilter === 'Today') {
                     const today = toYMD(now);
                     filtered = filtered.filter(r => (r.date || 'Pending') === today);
@@ -1630,8 +1630,8 @@ const TravelExpenseGrid = ({
                             {nature === 'Local Travel' && (
                                 <div className="date-filter-group" style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'white', padding: '4px 12px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
                                     <Calendar size={14} style={{ color: '#4f46e5' }} />
-                                    <select 
-                                        value={dateFilter} 
+                                    <select
+                                        value={dateFilter}
                                         onChange={e => {
                                             if (onFilterChange) onFilterChange(e.target.value);
                                             else setDateFilter && setDateFilter(e.target.value);
@@ -1738,20 +1738,20 @@ const TravelExpenseGrid = ({
                                                                             <input type="text" placeholder="Start location / Origin" value={row.details.origin || ''} onChange={e => updateDetails(row.id, 'origin', e.target.value)} className="cat-input" disabled={isLocked} />
                                                                         </div>
                                                                         <div className="input-with-label-mini">
-                                                                             <label>Odo Reading</label>
-                                                                             <input type="number" placeholder="0" value={row.details.odoStart || ''} onChange={e => updateDetails(row.id, 'odoStart', e.target.value)} className="cat-input" disabled={isLocked || row.date !== todayStr} />
-                                                                         </div>
-                                                                         <div className="input-with-label-mini">
-                                                                             <label>Odo Photo</label>
-                                                                             {(!isLocked && row.date === todayStr) ? (
-                                                                                 <button type="button" className="odo-capture-btn" style={{ width: '100%', justifyContent: 'center' }} onClick={() => handleOdoCapture(row.id, 'odoStart')}>
-                                                                                     {row.details.odoStartImg ? <Check size={13} style={{ color: '#16a34a' }} /> : <Camera size={13} />}
-                                                                                     <span>{row.details.odoStartImg ? 'Captured' : 'Odo Pic'}</span>
-                                                                                 </button>
-                                                                             ) : (
-                                                                                 <div style={{ fontSize: '0.7rem', color: row.details.odoStartImg ? '#16a34a' : '#94a3b8' }}>{row.details.odoStartImg ? '✓ Captured' : 'N/A'}</div>
-                                                                             )}
-                                                                         </div>
+                                                                            <label>Odo Reading</label>
+                                                                            <input type="number" placeholder="0" value={row.details.odoStart || ''} onChange={e => updateDetails(row.id, 'odoStart', e.target.value)} className="cat-input" disabled={isLocked || row.date !== todayStr} />
+                                                                        </div>
+                                                                        <div className="input-with-label-mini">
+                                                                            <label>Odo Photo</label>
+                                                                            {(!isLocked && row.date === todayStr) ? (
+                                                                                <button type="button" className="odo-capture-btn" style={{ width: '100%', justifyContent: 'center' }} onClick={() => handleOdoCapture(row.id, 'odoStart')}>
+                                                                                    {row.details.odoStartImg ? <Check size={13} style={{ color: '#16a34a' }} /> : <Camera size={13} />}
+                                                                                    <span>{row.details.odoStartImg ? 'Captured' : 'Odo Pic'}</span>
+                                                                                </button>
+                                                                            ) : (
+                                                                                <div style={{ fontSize: '0.7rem', color: row.details.odoStartImg ? '#16a34a' : '#94a3b8' }}>{row.details.odoStartImg ? '✓ Captured' : 'N/A'}</div>
+                                                                            )}
+                                                                        </div>
                                                                     </div>
                                                                 </div>
 
@@ -1771,21 +1771,21 @@ const TravelExpenseGrid = ({
                                                                             <label>Location</label>
                                                                             <input type="text" placeholder="End location / Destination" value={row.details.destination || ''} onChange={e => updateDetails(row.id, 'destination', e.target.value)} className="cat-input" disabled={isLocked} />
                                                                         </div>
-                                                                         <div className="input-with-label-mini">
-                                                                             <label>Odo Reading</label>
-                                                                             <input type="number" placeholder="0" value={row.details.odoEnd || ''} onChange={e => updateDetails(row.id, 'odoEnd', e.target.value)} className="cat-input" disabled={isLocked || row.date !== todayStr} />
-                                                                         </div>
-                                                                         <div className="input-with-label-mini">
-                                                                             <label>Odo Photo</label>
-                                                                             {(!isLocked && row.date === todayStr) ? (
-                                                                                 <button type="button" className="odo-capture-btn" style={{ width: '100%', justifyContent: 'center' }} onClick={() => handleOdoCapture(row.id, 'odoEnd')}>
-                                                                                     {row.details.odoEndImg ? <Check size={13} style={{ color: '#16a34a' }} /> : <Camera size={13} />}
-                                                                                     <span>{row.details.odoEndImg ? 'Captured' : 'Odo Pic'}</span>
-                                                                                 </button>
-                                                                             ) : (
-                                                                                 <div style={{ fontSize: '0.7rem', color: row.details.odoEndImg ? '#16a34a' : '#94a3b8' }}>{row.details.odoEndImg ? '✓ Captured' : 'N/A'}</div>
-                                                                             )}
-                                                                         </div>
+                                                                        <div className="input-with-label-mini">
+                                                                            <label>Odo Reading</label>
+                                                                            <input type="number" placeholder="0" value={row.details.odoEnd || ''} onChange={e => updateDetails(row.id, 'odoEnd', e.target.value)} className="cat-input" disabled={isLocked || row.date !== todayStr} />
+                                                                        </div>
+                                                                        <div className="input-with-label-mini">
+                                                                            <label>Odo Photo</label>
+                                                                            {(!isLocked && row.date === todayStr) ? (
+                                                                                <button type="button" className="odo-capture-btn" style={{ width: '100%', justifyContent: 'center' }} onClick={() => handleOdoCapture(row.id, 'odoEnd')}>
+                                                                                    {row.details.odoEndImg ? <Check size={13} style={{ color: '#16a34a' }} /> : <Camera size={13} />}
+                                                                                    <span>{row.details.odoEndImg ? 'Captured' : 'Odo Pic'}</span>
+                                                                                </button>
+                                                                            ) : (
+                                                                                <div style={{ fontSize: '0.7rem', color: row.details.odoEndImg ? '#16a34a' : '#94a3b8' }}>{row.details.odoEndImg ? '✓ Captured' : 'N/A'}</div>
+                                                                            )}
+                                                                        </div>
                                                                     </div>
                                                                 </div>
 
@@ -2341,36 +2341,36 @@ const TravelExpenseGrid = ({
                                                                                 );
                                                                             })()}
                                                                             <div className="odo-row mb-2">
-                                                                                 <span className="odo-label">Start</span>
-                                                                                 <div style={{ display: 'flex', alignItems: 'center', position: 'relative', width: '100%' }}>
-                                                                                     <input
-                                                                                         type="number"
-                                                                                         placeholder="0"
-                                                                                         value={row.details.odoStart || ''}
-                                                                                         onChange={e => updateDetails(row.id, 'odoStart', e.target.value)}
-                                                                                         className={errors[row.id]?.odoStart ? 'error' : ''}
-                                                                                         style={{ paddingRight: '50px', width: '100%' }}
-                                                                                         disabled={isLocked || row.date !== todayStr}
-                                                                                     />
-                                                                                     <button type="button" className="odo-cam-btn" onClick={() => handleOdoCapture(row.id, 'odoStart')} disabled={isLocked || row.date !== todayStr}>
-                                                                                         {row.details.odoStartImg ? <Check size={12} className="text-success" /> : <Camera size={12} />}
-                                                                                     </button>
-                                                                                 </div>
-                                                                                 <span className="odo-label">End</span>
-                                                                                 <div style={{ display: 'flex', alignItems: 'center', position: 'relative', width: '100%' }}>
-                                                                                     <input
-                                                                                         type="number"
-                                                                                         placeholder="0"
-                                                                                         value={row.details.odoEnd || ''}
-                                                                                         onChange={e => updateDetails(row.id, 'odoEnd', e.target.value)}
-                                                                                         className={errors[row.id]?.odoEnd ? 'error' : ''}
-                                                                                         style={{ paddingRight: '50px', width: '100%' }}
-                                                                                         disabled={isLocked || row.date !== todayStr}
-                                                                                     />
-                                                                                     <button type="button" className="odo-cam-btn" onClick={() => handleOdoCapture(row.id, 'odoEnd')} disabled={isLocked || row.date !== todayStr}>
-                                                                                         {row.details.odoEndImg ? <Check size={12} className="text-success" /> : <Camera size={12} />}
-                                                                                     </button>
-                                                                                 </div>
+                                                                                <span className="odo-label">Start</span>
+                                                                                <div style={{ display: 'flex', alignItems: 'center', position: 'relative', width: '100%' }}>
+                                                                                    <input
+                                                                                        type="number"
+                                                                                        placeholder="0"
+                                                                                        value={row.details.odoStart || ''}
+                                                                                        onChange={e => updateDetails(row.id, 'odoStart', e.target.value)}
+                                                                                        className={errors[row.id]?.odoStart ? 'error' : ''}
+                                                                                        style={{ paddingRight: '50px', width: '100%' }}
+                                                                                        disabled={isLocked || row.date !== todayStr}
+                                                                                    />
+                                                                                    <button type="button" className="odo-cam-btn" onClick={() => handleOdoCapture(row.id, 'odoStart')} disabled={isLocked || row.date !== todayStr}>
+                                                                                        {row.details.odoStartImg ? <Check size={12} className="text-success" /> : <Camera size={12} />}
+                                                                                    </button>
+                                                                                </div>
+                                                                                <span className="odo-label">End</span>
+                                                                                <div style={{ display: 'flex', alignItems: 'center', position: 'relative', width: '100%' }}>
+                                                                                    <input
+                                                                                        type="number"
+                                                                                        placeholder="0"
+                                                                                        value={row.details.odoEnd || ''}
+                                                                                        onChange={e => updateDetails(row.id, 'odoEnd', e.target.value)}
+                                                                                        className={errors[row.id]?.odoEnd ? 'error' : ''}
+                                                                                        style={{ paddingRight: '50px', width: '100%' }}
+                                                                                        disabled={isLocked || row.date !== todayStr}
+                                                                                    />
+                                                                                    <button type="button" className="odo-cam-btn" onClick={() => handleOdoCapture(row.id, 'odoEnd')} disabled={isLocked || row.date !== todayStr}>
+                                                                                        {row.details.odoEndImg ? <Check size={12} className="text-success" /> : <Camera size={12} />}
+                                                                                    </button>
+                                                                                </div>
                                                                             </div>
                                                                         </>
                                                                     )}

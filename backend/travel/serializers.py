@@ -1,12 +1,12 @@
 from rest_framework import serializers
 from .models import (
     Trip, TripOdometer, Expense, TravelClaim, TravelAdvance, Dispute, PolicyDocument, BulkActivityBatch, JobReport,
-    TravelModeMaster, BookingTypeMaster, AirlineMaster, FlightClassMaster, TrainClassMaster,
-    BusOperatorMaster, BusTypeMaster, IntercityCabVehicleMaster, TravelProviderMaster,
-    TrainProviderMaster, BusProviderMaster, IntercityCabProviderMaster,
-    LocalTravelModeMaster, LocalCarSubTypeMaster, LocalBikeSubTypeMaster, LocalProviderMaster,
-    StayTypeMaster, RoomTypeMaster, MealCategoryMaster, MealTypeMaster, IncidentalTypeMaster,
-    CustomMasterDefinition, CustomMasterValue, MasterModule, TripTracking
+    TravelModeMaster, BookingTypeMaster, OperatorMaster, TravelClassMaster, VehicleMaster, ProviderMaster,
+    TicketStatusMaster, QuotaTypeMaster,
+    LocalTravelModeMaster, LocalProviderMaster, LocalSubTypeMaster,
+    StayTypeMaster, RoomTypeMaster, StayBookingTypeMaster, StayBookingSourceMaster,
+    MealCategoryMaster, MealTypeMaster, MealSourceMaster, MealProviderMaster,
+    IncidentalTypeMaster, CustomMasterDefinition, CustomMasterValue, MasterModule, TripTracking
 )
 from api_management.utils import encrypt_key, decrypt_key
 
@@ -27,54 +27,34 @@ class BookingTypeMasterSerializer(serializers.ModelSerializer):
         model = BookingTypeMaster
         fields = '__all__'
 
-class AirlineMasterSerializer(serializers.ModelSerializer):
+class OperatorMasterSerializer(serializers.ModelSerializer):
     class Meta:
-        model = AirlineMaster
+        model = OperatorMaster
         fields = '__all__'
 
-class FlightClassMasterSerializer(serializers.ModelSerializer):
+class TravelClassMasterSerializer(serializers.ModelSerializer):
     class Meta:
-        model = FlightClassMaster
+        model = TravelClassMaster
         fields = '__all__'
 
-class TrainClassMasterSerializer(serializers.ModelSerializer):
+class VehicleMasterSerializer(serializers.ModelSerializer):
     class Meta:
-        model = TrainClassMaster
+        model = VehicleMaster
         fields = '__all__'
 
-class BusOperatorMasterSerializer(serializers.ModelSerializer):
+class ProviderMasterSerializer(serializers.ModelSerializer):
     class Meta:
-        model = BusOperatorMaster
+        model = ProviderMaster
         fields = '__all__'
 
-class BusTypeMasterSerializer(serializers.ModelSerializer):
+class TicketStatusMasterSerializer(serializers.ModelSerializer):
     class Meta:
-        model = BusTypeMaster
+        model = TicketStatusMaster
         fields = '__all__'
 
-class IntercityCabVehicleMasterSerializer(serializers.ModelSerializer):
+class QuotaTypeMasterSerializer(serializers.ModelSerializer):
     class Meta:
-        model = IntercityCabVehicleMaster
-        fields = '__all__'
-
-class TravelProviderMasterSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = TravelProviderMaster
-        fields = '__all__'
-
-class TrainProviderMasterSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = TrainProviderMaster
-        fields = '__all__'
-
-class BusProviderMasterSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = BusProviderMaster
-        fields = '__all__'
-
-class IntercityCabProviderMasterSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = IntercityCabProviderMaster
+        model = QuotaTypeMaster
         fields = '__all__'
 
 class LocalTravelModeMasterSerializer(serializers.ModelSerializer):
@@ -82,19 +62,14 @@ class LocalTravelModeMasterSerializer(serializers.ModelSerializer):
         model = LocalTravelModeMaster
         fields = '__all__'
 
-class LocalCarSubTypeMasterSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = LocalCarSubTypeMaster
-        fields = '__all__'
-
-class LocalBikeSubTypeMasterSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = LocalBikeSubTypeMaster
-        fields = '__all__'
-
 class LocalProviderMasterSerializer(serializers.ModelSerializer):
     class Meta:
         model = LocalProviderMaster
+        fields = '__all__'
+
+class LocalSubTypeMasterSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = LocalSubTypeMaster
         fields = '__all__'
 
 class StayTypeMasterSerializer(serializers.ModelSerializer):
@@ -107,6 +82,16 @@ class RoomTypeMasterSerializer(serializers.ModelSerializer):
         model = RoomTypeMaster
         fields = '__all__'
 
+class StayBookingTypeMasterSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = StayBookingTypeMaster
+        fields = '__all__'
+
+class StayBookingSourceMasterSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = StayBookingSourceMaster
+        fields = '__all__'
+
 class MealCategoryMasterSerializer(serializers.ModelSerializer):
     class Meta:
         model = MealCategoryMaster
@@ -115,6 +100,16 @@ class MealCategoryMasterSerializer(serializers.ModelSerializer):
 class MealTypeMasterSerializer(serializers.ModelSerializer):
     class Meta:
         model = MealTypeMaster
+        fields = '__all__'
+
+class MealSourceMasterSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = MealSourceMaster
+        fields = '__all__'
+
+class MealProviderMasterSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = MealProviderMaster
         fields = '__all__'
 
 class IncidentalTypeMasterSerializer(serializers.ModelSerializer):
@@ -204,6 +199,91 @@ class ExpenseSerializer(serializers.ModelSerializer):
         if data.get('receipt_image'):
             data['receipt_image'] = encrypt_key(data['receipt_image'])
         return super().to_internal_value(data)
+
+    def validate(self, attrs):
+        import json
+        from api_management.utils import decrypt_key
+
+        trip = attrs.get('trip')
+        category = attrs.get('category')
+        date = attrs.get('date')
+        description_str = attrs.get('description', '{}')
+        
+        try:
+            description = json.loads(description_str)
+        except:
+            description = {}
+
+        # 1. INCIDENTAL: Duplicate entry check
+        if category == 'Incidental':
+            incidental_type = description.get('incidentalType')
+            incidental_time = description.get('incidentalTime')
+            other_reason = (description.get('otherReason') or "").strip().lower()
+
+            if incidental_type and incidental_time:
+                existing_incidental = Expense.objects.filter(trip=trip, category='Incidental', date=date)
+                if self.instance:
+                    existing_incidental = existing_incidental.exclude(id=self.instance.id)
+
+                for inc_exp in existing_incidental:
+                    try:
+                        inc_desc = json.loads(inc_exp.description)
+                        # Case-insensitive, stripped comparison for type and time
+                        if ((inc_desc.get('incidentalType') or "").strip().lower() == incidental_type.strip().lower() and 
+                            (inc_desc.get('incidentalTime') or "").strip() == incidental_time.strip()):
+                            
+                            # Special case for "Others"
+                            if incidental_type.strip().lower() in ['others', 'other']:
+                                if (inc_desc.get('otherReason') or "").strip().lower() == other_reason:
+                                    raise serializers.ValidationError({"description": "Duplicate entry not allowed"})
+                            else:
+                                raise serializers.ValidationError({"description": "Duplicate entry not allowed"})
+                    except json.JSONDecodeError:
+                        continue
+
+        # 2. FOOD & REFRESHMENTS: Daily Meal Limits
+        if category == 'Food':
+            meal_type = description.get('mealType')
+            if meal_type in ['Breakfast', 'Lunch', 'Dinner']:
+                existing_food = Expense.objects.filter(trip=trip, category='Food', date=date)
+                if self.instance:
+                    existing_food = existing_food.exclude(id=self.instance.id)
+                
+                for food_exp in existing_food:
+                    try:
+                        food_desc = json.loads(food_exp.description)
+                        if (food_desc.get('mealType') or "").strip().lower() == meal_type.strip().lower():
+                            raise serializers.ValidationError({"description": f"A {meal_type} entry already exists for this date."})
+                    except:
+                        continue
+
+        # 3. ACCOMMODATION: Overlap & Seq Check
+        if category == 'Accommodation':
+            check_in = description.get('checkInDate')
+            check_out = description.get('checkOutDate')
+            
+            if check_in and check_out:
+                if check_in >= check_out:
+                    raise serializers.ValidationError({"description": "Check-out date must be after Check-in date."})
+
+                existing_stays = Expense.objects.filter(trip=trip, category='Accommodation').order_by('date')
+                if self.instance:
+                    existing_stays = existing_stays.exclude(id=self.instance.id)
+
+                for stay in existing_stays:
+                    try:
+                        stay_desc = json.loads(stay.description)
+                        s_in = stay_desc.get('checkInDate')
+                        s_out = stay_desc.get('checkOutDate')
+                        
+                        if s_in and s_out:
+                            # Check overlap
+                            if (check_in < s_out) and (check_out > s_in):
+                                raise serializers.ValidationError({"description": f"Stay overlaps with an existing entry ({s_in} to {s_out})."})
+                    except:
+                        continue
+
+        return attrs
 
 class TravelClaimSerializer(serializers.ModelSerializer):
     expenses = ExpenseSerializer(many=True, read_only=True, source='trip.expenses')

@@ -78,8 +78,8 @@ const TripStory = () => {
         fetchTripStory();
     }, [id]);
 
-    const fetchTripStory = async () => {
-        setIsLoading(true);
+    const fetchTripStory = async (silent = false) => {
+        if (!silent) setIsLoading(true);
         try {
             const decodedId = decodeId(id);
             const response = await api.get(`/api/trips/${decodedId}/`);
@@ -88,7 +88,7 @@ const TripStory = () => {
             console.error("Failed to fetch trip story:", error);
             showToast("Failed to load trip story", "error");
         } finally {
-            setIsLoading(false);
+            if (!silent) setIsLoading(false);
         }
     };
 
@@ -210,7 +210,7 @@ const TripStory = () => {
         }
     };
 
-    if (isLoading) {
+    if (isLoading && !trip) {
         return (
             <div className="story-page-loading">
                 <div className="spinner"></div>
@@ -630,6 +630,7 @@ const TripStory = () => {
                             // only show bulk button for full travel requests (TRP-)
                             showBulkUpload={trip.trip_id?.startsWith('TRP-')}
                             onJobReportClick={() => setShowJobReportModal(true)}
+                            hasAdditionalLuggage={!!luggageWeight}
                         />
                     )}
                 </div>

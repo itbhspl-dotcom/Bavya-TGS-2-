@@ -1,134 +1,106 @@
 import React, { useState, useEffect } from 'react';
 import api from '../api/api';
 import {
-    Plus, Edit2, Trash2, CheckCircle, XCircle, ChevronDown, AlignLeft, Settings, Layers, AlertCircle
+    Plus, Edit2, Trash2, AlignLeft, Layers, AlertCircle, RotateCcw, Eye, EyeOff
 } from 'lucide-react';
-//
 import { useToast } from '../context/ToastContext';
 
-// Config layout for managing the system architecture itself
-const CONFIG_GROUP = {
-    id: 'config',
-    label: 'Config (Add Masters)',
-    tables: [
-        { id: 'master_module', name: 'Manage Modules', endpoint: 'master-modules', fields: ['name', 'display_order'] },
-        { id: 'custom_master_def', name: 'Manage Master Tables', endpoint: 'custom-master-definitions', fields: ['table_name', 'module_ref', 'api_endpoint', 'fields_list'] },
-    ]
-};
+const CONFIG_GROUPS = [
+    {
+        id: 'travel',
+        label: 'Travel Module',
+        tables: [
+            { id: 'travel-mode', name: 'Travel Modes', endpoint: 'travel-mode-masters', fields: ['mode_name', 'status'] },
+            { id: 'travel-provider', name: 'Providers', endpoint: 'provider-masters', fields: ['provider_name', 'is_flight', 'is_train', 'is_bus', 'is_intercity_cab', 'status'] },
+            { id: 'travel-operator', name: 'Operators', endpoint: 'operator-masters', fields: ['operator_name', 'is_flight', 'is_train', 'is_bus', 'status'] },
+            { id: 'travel-class', name: 'Travel Classes', endpoint: 'travel-class-masters', fields: ['class_name', 'is_flight', 'is_train', 'is_bus', 'status'] },
+            { id: 'travel-vehicle', name: 'Vehicles', endpoint: 'vehicle-masters', fields: ['vehicle_name', 'is_bus', 'is_intercity_cab', 'status'] },
+            { id: 'booking-type', name: 'Booking Types', endpoint: 'booking-type-masters', fields: ['booking_type', 'status'] },
+            { id: 'ticket-status', name: 'Ticket Statuses', endpoint: 'ticket-status-masters', fields: ['status_name', 'is_flight', 'is_train', 'is_bus', 'is_intercity_cab', 'status'] },
+            { id: 'quota-type', name: 'Quota Types', endpoint: 'quota-type-masters', fields: ['quota_name', 'status'] }
+        ]
+    },
+    {
+        id: 'local',
+        label: 'Local Conveyance',
+        tables: [
+            { id: 'local-mode', name: 'Travel Modes', endpoint: 'local-travel-mode-masters', fields: ['mode_name', 'status'] },
+            { id: 'local-provider', name: 'Providers', endpoint: 'local-provider-masters', fields: ['provider_name', 'is_car', 'is_bike', 'is_auto', 'is_bus', 'is_metro', 'status'] },
+            { id: 'local-subtype', name: 'Sub Types', endpoint: 'local-sub-type-masters', fields: ['sub_type', 'is_car', 'is_bike', 'is_auto', 'status'] }
+        ]
+    },
+    {
+        id: 'stay',
+        label: 'Stay & Lodging',
+        tables: [
+            { id: 'stay-type', name: 'Stay Types', endpoint: 'stay-type-masters', fields: ['stay_type', 'status'] },
+            { id: 'room-type', name: 'Room Types', endpoint: 'room-type-masters', fields: ['room_type', 'status'] },
+            { id: 'stay-booking', name: 'Booking Types', endpoint: 'stay-booking-type-masters', fields: ['booking_type', 'status'] },
+            { id: 'stay-source', name: 'Booking Sources', endpoint: 'stay-booking-source-masters', fields: ['source_name', 'status'] }
+        ]
+    },
+    {
+        id: 'food',
+        label: 'Food & Refreshments',
+        tables: [
+            { id: 'meal-cat', name: 'Meal Categories', endpoint: 'meal-category-masters', fields: ['category_name', 'status'] },
+            { id: 'meal-type', name: 'Meal Types', endpoint: 'meal-type-masters', fields: ['meal_type', 'status'] },
+            { id: 'meal-source', name: 'Meal Sources', endpoint: 'meal-source-masters', fields: ['source_name', 'status'] },
+            { id: 'meal-provider', name: 'Meal Providers', endpoint: 'meal-provider-masters', fields: ['provider_name', 'status'] }
+        ]
+    },
+    {
+        id: 'incidental',
+        label: 'Incidental Expenses',
+        tables: [
+            { id: 'incidental-type', name: 'Incidental Types', endpoint: 'incidental-type-masters', fields: ['expense_type', 'category', 'status'] }
+        ]
+    }
+];
 
 export default function AdminMasterManagement() {
     const { showToast } = useToast() || { showToast: () => { } };
 
-    // UI State
-    const [groups, setGroups] = useState([CONFIG_GROUP]);
-    const [activeGroup, setActiveGroup] = useState(CONFIG_GROUP);
-    const [activeTab, setActiveTab] = useState(CONFIG_GROUP.tables[0]);
+    const [activeGroup, setActiveGroup] = useState(CONFIG_GROUPS[0]);
+    const [activeTab, setActiveTab] = useState(CONFIG_GROUPS[0].tables[0]);
+
     const [data, setData] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [fieldMetadata, setFieldMetadata] = useState({});
 
-    // Master data definitions from DB
-    const [allModules, setAllModules] = useState([]);
-
-    // Form / Modal State
     const [isFormOpen, setIsFormOpen] = useState(false);
     const [editingItem, setEditingItem] = useState(null);
     const [formData, setFormData] = useState({});
+
     const [isConfirmOpen, setIsConfirmOpen] = useState(false);
     const [deletingId, setDeletingId] = useState(null);
 
-    const getVisibleFields = (tab) => {
-        if (!tab) return [];
-        if (tab.id === 'custom_master_def') {
-            return tab.fields.filter(field => !['api_endpoint', 'fields_list'].includes(field));
-        }
-        return tab.fields;
-    };
+    const [showDeleted, setShowDeleted] = useState(false);
 
-    const visibleFields = getVisibleFields(activeTab);
+    const visibleFields = activeTab.fields;
 
-    // Initial load: Fetch the structure from the database
-    useEffect(() => {
-        fetchStructure();
-    }, []);
-
-    // Fetch data whenever the active tab changes
     useEffect(() => {
         fetchData();
-    }, [activeTab]);
-
-    /**
-     * Fetches modules and table definitions from the database to build the UI navigation.
-     * No hardcoded system tables are used here; everything comes from travel_custommasterdefinition.
-     */
-    const fetchStructure = async () => {
-        try {
-            // 1. Fetch Top-Level Modules (Travel, Local, etc.)
-            const modRes = await api.get('/api/master-modules/');
-            const modules = modRes.data;
-            setAllModules(modules);
-
-            // 2. Fetch Table Definitions (both original system tables and user-added ones)
-            const defRes = await api.get('/api/custom-master-definitions/');
-            const definitions = defRes.data;
-
-            // 3. Group tables into their respective modules
-            const newGroups = modules.map(mod => {
-                const tables = definitions
-                    .filter(d => d.module_ref === mod.id)
-                    .map(def => ({
-                        id: `table_${def.id}`,
-                        name: def.table_name,
-                        endpoint: def.api_endpoint || 'custom-master-values',
-                        fields: def.fields_list ? def.fields_list.split(',').map(f => f.trim()) : ['name', 'code'],
-                        definitionId: def.api_endpoint ? null : def.id, // Only send definitionId for custom values table
-                        isCustom: !def.is_system
-                    }));
-
-                return {
-                    id: mod.id,
-                    label: mod.name,
-                    tables: tables
-                };
-            }); // Show all modules, even those without tables yet
-
-            // 4. Add the configuration management group
-            newGroups.push(CONFIG_GROUP);
-            setGroups(newGroups);
-
-            // 5. Update active markers to ensure UI doesn't break after reload
-            if (activeGroup.id !== 'config') {
-                const updatedActive = newGroups.find(g => g.id === activeGroup.id);
-                if (updatedActive) {
-                    setActiveGroup(updatedActive);
-                    // Update activeTab to ensure its fields array is refreshed from the new definition fetch
-                    if (activeTab) {
-                        const newTab = updatedActive.tables.find(t => t.id === activeTab.id);
-                        if (newTab) {
-                            setActiveTab(newTab);
-                        }
-                    }
-                } else {
-                    const first = newGroups[0];
-                    if (first) {
-                        setActiveGroup(first);
-                        setActiveTab(first.tables[0]);
-                    }
-                }
-            }
-        } catch (error) {
-            console.error("Failed to load master structure", error);
-            showToast("Failed to load master data structure", "error");
-        }
-    };
+    }, [activeTab, showDeleted]);
 
     const fetchData = async () => {
         setLoading(true);
         try {
             let url = `/api/${activeTab.endpoint}/`;
+            if (showDeleted) url += '?include_deleted=true';
 
-            // If it's a generic custom value table, we must filter by the specific definition ID
-            if (activeTab.definitionId) {
-                url += `?definition=${activeTab.definitionId}`;
+            // Try fetching field metadata
+            try {
+                const optionsRes = await api.options(url);
+                const actions = optionsRes.data?.actions;
+                if (actions && (actions.POST || actions.PUT)) {
+                    setFieldMetadata(actions.POST || actions.PUT);
+                } else {
+                    setFieldMetadata({});
+                }
+            } catch (err) {
+                console.warn("Could not fetch field metadata via OPTIONS", err);
+                setFieldMetadata({});
             }
 
             const res = await api.get(url);
@@ -144,23 +116,18 @@ export default function AdminMasterManagement() {
     const handleOpenForm = (item = null) => {
         setEditingItem(item);
         if (item) {
-            const nextFormData = { ...item };
-            if (activeTab.id === 'custom_master_def') {
-                nextFormData.api_endpoint = item.api_endpoint || '';
-                nextFormData.fields_list = item.fields_list || '';
-            }
-            setFormData(nextFormData);
+            setFormData({ ...item });
         } else {
             const initial = {};
             activeTab.fields.forEach(f => {
-                if (f === 'module_ref' && activeGroup.id !== 'config') initial[f] = activeGroup.id;
-                else if (f.startsWith('is_')) initial[f] = false;
-                else initial[f] = '';
+                if (fieldMetadata[f]?.type === 'boolean' || f.startsWith('is_') || f === 'status') {
+                    initial[f] = false;
+                } else if (f === 'category') {
+                    initial[f] = 'general_incidental'; // Default
+                } else {
+                    initial[f] = '';
+                }
             });
-            if (activeTab.id === 'custom_master_def') {
-                initial.api_endpoint = '';
-                initial.fields_list = '';
-            }
             setFormData(initial);
         }
         setIsFormOpen(true);
@@ -169,37 +136,21 @@ export default function AdminMasterManagement() {
     const handleSave = async (e) => {
         e.preventDefault();
         try {
-            const payload = { ...formData };
-
-            if (activeTab.id === 'custom_master_def') {
-                payload.api_endpoint = payload.api_endpoint || '';
-                payload.fields_list = (payload.fields_list || 'name,code').trim();
-            }
-
-            // Inject definition ID for custom value records
-            if (activeTab.definitionId) {
-                payload.definition = activeTab.definitionId;
-            }
-
             if (editingItem) {
-                await api.put(`/api/${activeTab.endpoint}/${editingItem.id}/`, payload);
+                await api.put(`/api/${activeTab.endpoint}/${editingItem.id}/`, formData);
                 showToast("Updated successfully", "success");
             } else {
-                await api.post(`/api/${activeTab.endpoint}/`, payload);
+                await api.post(`/api/${activeTab.endpoint}/`, formData);
                 showToast("Created successfully", "success");
             }
             setIsFormOpen(false);
             fetchData();
-            // If we modified definitions, refresh the whole UI structure
-            if (activeTab.id === 'custom_master_def' || activeTab.id === 'master_module') {
-                fetchStructure();
-            }
         } catch (error) {
             const errorData = error.response?.data;
             const firstFieldError = errorData && typeof errorData === 'object'
                 ? Object.values(errorData).flat().find(Boolean)
                 : null;
-            showToast(firstFieldError || errorData?.detail || "Operation failed. Check inputs.", "error");
+            showToast(firstFieldError || errorData?.detail || "Operation failed", "error");
         }
     };
 
@@ -214,11 +165,18 @@ export default function AdminMasterManagement() {
             showToast("Deleted successfully", "success");
             setIsConfirmOpen(false);
             fetchData();
-            if (activeTab.id === 'custom_master_def' || activeTab.id === 'master_module') {
-                fetchStructure();
-            }
         } catch (error) {
             showToast("Deletion failed", "error");
+        }
+    };
+
+    const handleRestore = async (id) => {
+        try {
+            await api.post(`/api/${activeTab.endpoint}/${id}/restore/`);
+            showToast("Restored successfully", "success");
+            fetchData();
+        } catch (error) {
+            showToast("Restoration failed", "error");
         }
     };
 
@@ -226,12 +184,11 @@ export default function AdminMasterManagement() {
         <div className="content-inner animate-fade-in">
             <div className="admin-mgmt-header">
                 <h1>Master Data Management</h1>
-                <p>Configure system hierarchies and dynamic data tables.</p>
+                <p>Configure system hierarchies and static master tables for all application modules.</p>
             </div>
 
-            {/* Top Navigation - Module Level */}
             <div className="trip-category-toggle">
-                {groups.map(group => (
+                {CONFIG_GROUPS.map(group => (
                     <button
                         key={group.id}
                         className={`module-btn ${activeGroup.id === group.id ? 'active' : ''}`}
@@ -240,14 +197,14 @@ export default function AdminMasterManagement() {
                             setActiveTab(group.tables[0]);
                         }}
                     >
-                        {group.id === 'config' ? <Settings size={18} /> : <Layers size={18} />}
+                        <Layers size={18} />
                         {group.label}
                     </button>
                 ))}
             </div>
 
             <div className="admin-content-grid">
-                {/* Sidebar - Table Level */}
+                {/* Sidebar */}
                 <div className="glass premium-card">
                     <h3 className="sidebar-title">Available Tables</h3>
                     <div className="master-selector-list">
@@ -268,10 +225,21 @@ export default function AdminMasterManagement() {
                 <div className="glass premium-card">
                     <div className="panel-header">
                         <h2>{activeTab.name}</h2>
-                        <button className="add-btn" onClick={() => handleOpenForm()}>
-                            <Plus size={18} />
-                            Add Record
-                        </button>
+                        <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
+                            <button 
+                                className={`action-btn ${showDeleted ? 'active' : ''}`} 
+                                style={{ width: 'auto', padding: '0 12px', fontSize: '12px', height: '36px', display: 'flex', gap: '6px', alignItems: 'center', background: showDeleted ? '#eff6ff' : 'white', border: `1px solid ${showDeleted ? '#3b82f6' : '#e2e8f0'}`, color: showDeleted ? '#2563eb' : '#64748b' }}
+                                onClick={() => setShowDeleted(!showDeleted)}
+                                title={showDeleted ? "Hide inactive records" : "Show deleted/inactive records"}
+                            >
+                                {showDeleted ? <EyeOff size={14} /> : <Eye size={14} />}
+                                {showDeleted ? "Hide Inactive" : "Show Inactive"}
+                            </button>
+                            <button className="add-btn" onClick={() => handleOpenForm()}>
+                                <Plus size={18} />
+                                Add Record
+                            </button>
+                        </div>
                     </div>
 
                     <div className="data-table-container">
@@ -293,36 +261,27 @@ export default function AdminMasterManagement() {
                                 </thead>
                                 <tbody>
                                     {data.length > 0 ? data.map(item => (
-                                        <tr key={item.id}>
-                                            <td><span className="id-badge">{item.id}</span></td>
-                                            {(() => { console.log("Rendering Item Row:", item); return null; })()}
+                                        <tr key={item.id} style={{ opacity: item.is_deleted ? 0.6 : 1, backgroundColor: item.is_deleted ? '#f9fafb' : 'transparent' }}>
+                                            <td><span className="id-badge" style={{ background: item.is_deleted ? '#f1f5f9' : '#e0f2fe', color: item.is_deleted ? '#94a3b8' : '#0369a1' }}>{item.id} {item.is_deleted && '(Inactive)'}</span></td>
                                             {visibleFields.map(f => (
                                                 <td key={f}>
-                                                    {f === 'module_ref' ? (
-                                                        allModules.find(m => m.id === item[f])?.name || item[f]
-                                                    ) : f === 'category' ? (
-                                                        <span style={{ 
-                                                            color: '#475569',
-                                                            fontWeight: '600',
-                                                            background: '#f1f5f9',
+                                                    {fieldMetadata[f]?.type === 'boolean' || typeof item[f] === 'boolean' ? (
+                                                        <span style={{
+                                                            color: (item[f] === true || String(item[f]).toLowerCase() === 'true' || item[f] === 1) ? '#059669' : '#dc2626',
+                                                            fontWeight: 'bold',
+                                                            background: (item[f] === true || String(item[f]).toLowerCase() === 'true' || item[f] === 1) ? '#ecfdf5' : '#fef2f2',
                                                             padding: '4px 10px',
                                                             borderRadius: '20px',
                                                             fontSize: '0.8rem',
                                                             display: 'inline-block'
+                                                        }}>
+                                                            {(item[f] === true || String(item[f]).toLowerCase() === 'true' || item[f] === 1) ? 'TRUE' : 'FALSE'}
+                                                        </span>
+                                                    ) : f === 'category' ? (
+                                                        <span style={{
+                                                            color: '#475569', fontWeight: '600', background: '#f1f5f9', padding: '4px 10px', borderRadius: '20px', fontSize: '0.8rem', display: 'inline-block'
                                                         }}>
                                                             {String(item[f] || '').split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}
-                                                        </span>
-                                                    ) : f.startsWith('is_') || item[f] === true || item[f] === false || item[f] === 'true' || item[f] === 'false' ? (
-                                                        <span style={{ 
-                                                            color: (item[f] === true || item[f] === 'true' || item[f] === 1 || item[f] === '1') ? '#059669' : '#dc2626',
-                                                            fontWeight: 'bold',
-                                                            background: (item[f] === true || item[f] === 'true' || item[f] === 1 || item[f] === '1') ? '#ecfdf5' : '#fef2f2',
-                                                            padding: '4px 10px',
-                                                            borderRadius: '20px',
-                                                            fontSize: '0.8rem',
-                                                            display: 'inline-block'
-                                                        }}>
-                                                            {(item[f] === true || item[f] === 'true' || item[f] === 1 || item[f] === '1') ? 'TRUE' : 'FALSE'}
                                                         </span>
                                                     ) : (
                                                         item[f] === null || item[f] === undefined ? '' : String(item[f])
@@ -331,12 +290,20 @@ export default function AdminMasterManagement() {
                                             ))}
                                             <td>
                                                 <div className="action-row">
-                                                    <button className="action-btn edit-btn" title="Edit" onClick={() => handleOpenForm(item)}>
-                                                        <Edit2 size={16} />
-                                                    </button>
-                                                    <button className="action-btn delete-btn" title="Delete" onClick={() => confirmDelete(item.id)}>
-                                                        <Trash2 size={16} />
-                                                    </button>
+                                                    {item.is_deleted ? (
+                                                        <button className="action-btn" style={{ color: '#2563eb', background: '#eff6ff' }} title="Restore" onClick={() => handleRestore(item.id)}>
+                                                            <RotateCcw size={16} />
+                                                        </button>
+                                                    ) : (
+                                                        <>
+                                                            <button className="action-btn edit-btn" title="Edit" onClick={() => handleOpenForm(item)}>
+                                                                <Edit2 size={16} />
+                                                            </button>
+                                                            <button className="action-btn delete-btn" title="Delete" onClick={() => confirmDelete(item.id)}>
+                                                                <Trash2 size={16} />
+                                                            </button>
+                                                        </>
+                                                    )}
                                                 </div>
                                             </td>
                                         </tr>
@@ -361,19 +328,7 @@ export default function AdminMasterManagement() {
                             {visibleFields.map(field => (
                                 <div key={field} className="form-field">
                                     <label>{field.replace(/_/g, ' ').toUpperCase()}</label>
-                                    {field === 'module_ref' ? (
-                                        <select
-                                            className="form-select"
-                                            value={formData[field] || ''}
-                                            onChange={e => setFormData({ ...formData, [field]: e.target.value })}
-                                            required
-                                        >
-                                            <option value="">Select Module</option>
-                                            {allModules.map(m => (
-                                                <option key={m.id} value={m.id}>{m.name}</option>
-                                            ))}
-                                        </select>
-                                    ) : field === 'category' ? (
+                                    {field === 'category' ? (
                                         <select
                                             className="form-select"
                                             value={formData[field] || ''}
@@ -385,11 +340,11 @@ export default function AdminMasterManagement() {
                                             <option value="travel_incidental">Travel Incidental</option>
                                             <option value="general_incidental">General Incidental</option>
                                         </select>
-                                    ) : field.startsWith('is_') ? (
+                                    ) : fieldMetadata[field]?.type === 'boolean' || typeof formData[field] === 'boolean' || field.startsWith('is_') || field === 'status' ? (
                                         <input
                                             type="checkbox"
                                             className="form-checkbox-custom"
-                                            checked={formData[field] === true || formData[field] === 'true' || formData[field] === 1 || formData[field] === '1'}
+                                            checked={formData[field] === true || String(formData[field]).toLowerCase() === 'true' || formData[field] === 1}
                                             onChange={e => setFormData({ ...formData, [field]: e.target.checked })}
                                         />
                                     ) : (
@@ -399,7 +354,7 @@ export default function AdminMasterManagement() {
                                             value={formData[field] || ''}
                                             onChange={e => setFormData({ ...formData, [field]: e.target.value })}
                                             placeholder={`Enter ${field}...`}
-                                            required={field !== 'display_order' && field !== 'code'}
+                                            required
                                         />
                                     )}
                                 </div>
@@ -413,13 +368,13 @@ export default function AdminMasterManagement() {
                 </div>
             )}
 
-            {/* Confirm Delete Modal */}
+            {/* Confirm Delete Form */}
             {isConfirmOpen && (
                 <div className="modal-overlay">
                     <div className="modal-content confirm-modal">
                         <div className="confirm-icon"><AlertCircle size={32} /></div>
                         <h2>Confirm Deletion</h2>
-                        <p style={{ color: '#64748b', marginBottom: '32px' }}>Are you sure you want to delete this record? This action cannot be undone.</p>
+                        <p style={{ color: '#64748b', marginBottom: '32px' }}>Are you sure you want to delete this record?</p>
                         <div className="modal-actions">
                             <button className="cancel-btn" onClick={() => setIsConfirmOpen(false)}>No, Keep it</button>
                             <button className="save-btn" style={{ background: '#CB6040' }} onClick={handleDelete}>Yes, Delete</button>

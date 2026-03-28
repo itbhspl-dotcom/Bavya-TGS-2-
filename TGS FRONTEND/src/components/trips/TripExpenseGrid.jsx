@@ -61,22 +61,6 @@ const TRAVEL_STATUSES = ['Completed', 'Cancelled', 'Rescheduled'];
 const CAB_VEHICLE_TYPES = ['Sedan', 'SUV', 'MUV', 'Hatchback'];
 const LOCAL_TRAVEL_STATUSES = ['Completed', 'Cancelled', 'No-Show'];
 
-const HARDCODED_AIRLINES = ['IndiGo', 'Air India', 'Vistara', 'SpiceJet', 'Akasa Air', 'Air India Express'];
-const HARDCODED_BUS_OPERATORS = ['RedBus', 'AbhiBus', 'SRS Travels', 'KPN Travels', 'VRL Travels', 'Orange Travels'];
-const HARDCODED_TRAIN_PROVIDERS = ['IRCTC', 'Indian Railways'];
-const HARDCODED_LOCATIONS = [
-    { id: 1, name: 'Mumbai', code: 'BOM', cluster_type: 'Metro City' },
-    { id: 2, name: 'Delhi', code: 'DEL', cluster_type: 'Metro City' },
-    { id: 3, name: 'Bangalore', code: 'BLR', cluster_type: 'Metro City' },
-    { id: 4, name: 'Hyderabad', code: 'HYD', cluster_type: 'Metro City' },
-    { id: 5, name: 'Chennai', code: 'MAA', cluster_type: 'Metro City' },
-    { id: 6, name: 'Kolkata', code: 'CCU', cluster_type: 'Metro City' },
-    { id: 7, name: 'Pune', code: 'PNQ', cluster_type: 'City' },
-    { id: 8, name: 'Ahmedabad', code: 'AMD', cluster_type: 'City' },
-    { id: 9, name: 'Jaipur', code: 'JAI', cluster_type: 'City' },
-    { id: 10, name: 'Lucknow', code: 'LKO', cluster_type: 'City' }
-];
-
 const MOCK_DATA = [
     {
         id: 'mock-1',
@@ -256,6 +240,13 @@ const SearchableLocationSelect = ({ placeholder, options, value, onSelect, error
     );
 };
 
+const toTitleCase = (str) => {
+    if (!str) return '';
+    return str.toLowerCase().split(' ').map(word => {
+        return word.charAt(0).toUpperCase() + word.slice(1);
+    }).join(' ');
+};
+
 const TripExpenseGrid = ({
     tripId,
     startDate,
@@ -280,7 +271,7 @@ const TripExpenseGrid = ({
     const [flightClasses, setFlightClasses] = useState([]);
     const [trainClasses, setTrainClasses] = useState([]);
     const [busSeatTypes, setBusSeatTypes] = useState([]);
-    // Replaced with Constant CAB_VEHICLE_TYPES
+    const [intercityCabVehicleTypes, setIntercityCabVehicleTypes] = useState(CAB_VEHICLE_TYPES);
     const [airlines, setAirlines] = useState([]);
     const [busOperators, setBusOperators] = useState([]);
     const [travelProviders, setTravelProviders] = useState([]);
@@ -353,57 +344,176 @@ const TripExpenseGrid = ({
     const [bulkModal, setBulkModal] = useState({ visible: false, file: null, uploading: false });
 
     useEffect(() => {
-        // Hardcoded Master Data Setup
-        setTravelModes(FALLBACK_TRAVEL_MODES);
-        setBookedByOptions(FALLBACK_BOOKED_BY_OPTIONS);
-        setFlightClasses(FALLBACK_FLIGHT_CLASSES);
-        setTrainClasses(FALLBACK_TRAIN_CLASSES);
-        setBusSeatTypes(FALLBACK_BUS_SEAT_TYPES);
-        setAirlines(HARDCODED_AIRLINES);
-        setBusOperators(HARDCODED_BUS_OPERATORS);
-        setTrainProviders(HARDCODED_TRAIN_PROVIDERS);
-        setTravelProviders(['Self', 'Online Portal', 'Corporate Agent']);
-        setFlightProviders(HARDCODED_AIRLINES);
-        setBusProviders(HARDCODED_BUS_OPERATORS);
-        setCabProviders(['Uber', 'Ola', 'Meru', 'Local Agency']);
+        const fetchMasters = async () => {
+            try {
+                const [
+                    modesRes, bookedByRes, classesRes, vehiclesRes,
+                    operatorsRes, providersRes, locModesRes, locSubTypesRes, locProvRes,
+                    stayTypeRes, roomTypeRes, mealCatRes, mealTypeRes, incTypeRes,
+                    ticketStatusRes, quotaTypeRes
+                ] = await Promise.all([
+                    api.get('/api/travel-mode-masters/'),
+                    api.get('/api/booking-type-masters/'),
+                    api.get('/api/travel-class-masters/'),
+                    api.get('/api/vehicle-masters/'),
+                    api.get('/api/operator-masters/'),
+                    api.get('/api/provider-masters/'),
+                    api.get('/api/local-travel-mode-masters/'),
+                    api.get('/api/local-sub-type-masters/'),
+                    api.get('/api/local-provider-masters/'),
+                    api.get('/api/stay-type-masters/'),
+                    api.get('/api/room-type-masters/'),
+                    api.get('/api/meal-category-masters/'),
+                    api.get('/api/meal-type-masters/'),
+                    api.get('/api/incidental-type-masters/'),
+                    api.get('/api/ticket-status-masters/'),
+                    api.get('/api/quota-type-masters/')
+                ]);
+                // Populate Travel (Broad fetch + Local exact filtering)
+                const modesData = modesRes.data || [];
+                setTravelModes(modesData.filter(m => !!m.status).map(m => toTitleCase(m.mode_name)));
 
-        setTicketStatusOptions([
-            { id: 1, status_name: 'Confirmed', is_flight: true, is_train: true, is_bus: true, is_intercity_cab: true },
-            { id: 2, status_name: 'Waitlisted', is_flight: false, is_train: true, is_bus: true, is_intercity_cab: false },
-            { id: 3, status_name: 'RAC', is_flight: false, is_train: true, is_bus: false, is_intercity_cab: false }
-        ]);
+                const bookedByData = bookedByRes.data || [];
+                setBookedByOptions(bookedByData.filter(m => !!m.status).map(m => toTitleCase(m.booking_type)));
 
-        setQuotaTypeOptions([
-            { id: 1, quota_name: 'General' },
-            { id: 2, quota_name: 'Tatkal' },
-            { id: 3, quota_name: 'Ladies' },
-            { id: 4, quota_name: 'Senior Citizen' }
-        ]);
+                const classesData = classesRes.data || [];
+                setFlightClasses(classesData.filter(m => !!m.status && !!m.is_flight).map(m => toTitleCase(m.class_name)));
+                setTrainClasses(classesData.filter(m => !!m.status && !!m.is_train).map(m => toTitleCase(m.class_name)));
+                setBusSeatTypes(classesData.filter(m => !!m.status && !!m.is_bus).map(m => toTitleCase(m.class_name)));
 
-        setLocalTravelModes(FALLBACK_LOCAL_TRAVEL_MODES);
-        setLocalCarSubTypes(FALLBACK_LOCAL_CAR_SUBTYPES);
-        setLocalBikeSubTypes(FALLBACK_LOCAL_BIKE_SUBTYPES);
-        setLocalAutoSubTypes(FALLBACK_LOCAL_PT_SUBTYPES);
-        setLocalProviders(['Ola', 'Uber', 'Rapido', 'Local Vendor']);
+                const vehiclesData = vehiclesRes.data || [];
+                setIntercityCabVehicleTypes(vehiclesData.filter(m => !!m.status && !!m.is_intercity_cab).map(m => toTitleCase(m.vehicle_name)));
 
-        setIncidentalTypes(FALLBACK_INCIDENTAL_TYPES);
-        setLocalIncidentalTypes(['Parking', 'Toll', 'Puncture', 'Others']);
-        setTravelIncidentalTypes(['Porter', 'Luggage', 'Others']);
-        setGeneralIncidentalTypes(['Internet', 'Laundry', 'Others']);
+                const operatorsData = operatorsRes.data || [];
+                setAirlines(operatorsData.filter(m => !!m.status && !!m.is_flight).map(m => toTitleCase(m.operator_name)));
+                setBusOperators(operatorsData.filter(m => !!m.status && !!m.is_bus).map(m => toTitleCase(m.operator_name)));
 
-        setStayTypes(FALLBACK_ACCOM_TYPES);
-        setRoomTypes(FALLBACK_ROOM_TYPES);
-        setStayBookingTypes(['Corporate Guest House', 'External Hotel', 'Client Accommodation']);
-        setStayBookingSources(['Direct', 'MakeMyTrip', 'Goibibo', 'Travel Desk']);
+                const providersData = providersRes.data || [];
+                setTravelProviders(providersData.filter(m => !!m.status).map(m => toTitleCase(m.provider_name)));
+                setTrainProviders(providersData.filter(m => !!m.status && !!m.is_train).map(m => toTitleCase(m.provider_name)));
+                setBusProviders(providersData.filter(m => !!m.status && !!m.is_bus).map(m => toTitleCase(m.provider_name)));
+                setCabProviders(providersData.filter(m => !!m.is_intercity_cab).map(m => toTitleCase(m.provider_name)));
+                setFlightProviders(providersData.filter(m => !!m.status && !!m.is_flight).map(m => toTitleCase(m.provider_name)));
 
-        setMealCategories(['Self Meal', 'Project Meal', 'Others']);
-        setMealTypes(['Breakfast', 'Lunch', 'Dinner', 'Refreshments']);
-        setMealSources(['Hotel', 'Restaurant', 'Office Pantry', 'Personal']);
-        setMealProviders(['Zomato', 'Swiggy', 'Local Resto']);
+                if (ticketStatusRes.data?.length > 0) setTicketStatusOptions(ticketStatusRes.data.filter(m => !!m.status));
+                if (quotaTypeRes.data?.length > 0) setQuotaTypeOptions(quotaTypeRes.data.filter(m => !!m.status));
 
-        setLocationsPool(HARDCODED_LOCATIONS);
+                // Populate Local
+                const locModesData = locModesRes.data || [];
+                setLocalTravelModes((locModesData || []).map(m => toTitleCase(m.mode_name)));
 
-        // Fetch fuel rates for 2 Wheeler and 4 Wheeler (can still be dynamic if config exists)
+                const locSubTypesData = locSubTypesRes.data || [];
+                setLocalCarSubTypes(locSubTypesData.filter(m => !!m.is_car).map(m => toTitleCase(m.sub_type)));
+                setLocalBikeSubTypes(locSubTypesData.filter(m => !!m.is_bike).map(m => toTitleCase(m.sub_type)));
+                setLocalAutoSubTypes(locSubTypesData.filter(m => !!m.is_auto).map(m => toTitleCase(m.sub_type)));
+
+                const locProvData = locProvRes.data || [];
+                setLocalProviders(locProvData || []);
+
+                // Populate Stay
+                const stayTypesData = stayTypeRes.data || [];
+                setStayTypes(stayTypesData.map(m => toTitleCase(m.stay_type)));
+                const roomTypesData = roomTypeRes.data || [];
+                setRoomTypes(roomTypesData.map(m => toTitleCase(m.room_type)));
+
+                // Determine incidental subsets
+                if (incTypeRes.data?.length > 0) {
+                    const allInc = incTypeRes.data || [];
+                    setIncidentalTypes(allInc.map(m => toTitleCase(m.expense_type)));
+                    setLocalIncidentalTypes(allInc.filter(m => m.category === 'local_conveyance').map(m => toTitleCase(m.expense_type)));
+                    setTravelIncidentalTypes(allInc.filter(m => m.category === 'travel_incidental').map(m => toTitleCase(m.expense_type)));
+                    setGeneralIncidentalTypes(allInc.filter(m => m.category === 'general_incidental').map(m => toTitleCase(m.expense_type)));
+                }
+
+                // Populate Food
+                if (mealCatRes.data?.length > 0) setMealCategories(mealCatRes.data.map(m => toTitleCase(m.category_name)));
+                if (mealTypeRes.data?.length > 0) setMealTypes(mealTypeRes.data.map(m => toTitleCase(m.meal_type)));
+
+                try {
+                    const res = await api.get('/api/geo/hierarchy/');
+                    const data = res.data.results || res.data.data || res.data;
+                    const hierarchy = Array.isArray(data) ? data : [];
+
+                    const result = [];
+                    const CITY_TYPES = ['city', 'metropolitan city', 'metro city', 'metro_city', 'metropolyten city'];
+                    const isCityType = (t) => CITY_TYPES.includes((t || '').toLowerCase().trim());
+
+                    const walk = (node) => {
+                        if (!node || typeof node !== 'object') return;
+
+                        ['cities', 'metro_polyten_cities'].forEach(key => {
+                            const arr = node[key];
+                            if (Array.isArray(arr)) {
+                                arr.forEach(c => {
+                                    if (c && c.name) {
+                                        result.push({ id: c.id, name: c.name, code: c.code || '', cluster_type: key === 'metro_polyten_cities' ? 'Metro City' : 'City' });
+                                    }
+                                    walk(c);
+                                });
+                            }
+                        });
+
+                        ['clusters', 'cluster', 'children'].forEach(key => {
+                            const arr = node[key];
+                            if (Array.isArray(arr)) {
+                                arr.forEach(c => {
+                                    if (c && c.name && isCityType(c.type || c.cluster_type)) {
+                                        result.push({ id: c.id, name: c.name, code: c.code || '', cluster_type: (c.type || c.cluster_type || '').toLowerCase().includes('metro') ? 'Metro City' : 'City' });
+                                    }
+                                    walk(c);
+                                });
+                            }
+                        });
+
+                        ['continents', 'countries', 'states', 'districts', 'mandals', 'towns', 'villages', 'locations'].forEach(key => {
+                            if (Array.isArray(node[key])) node[key].forEach(walk);
+                        });
+                    };
+
+                    hierarchy.forEach(walk);
+
+                    const seen = new Set();
+                    const finalCities = result.filter(loc => { if (seen.has(loc.name)) return false; seen.add(loc.name); return true; }).sort((a, b) => a.name.localeCompare(b.name));
+                    setLocationsPool(finalCities);
+                } catch (err) {
+                    console.error("Geo hierarchy fetch failed:", err);
+                }
+
+            } catch (error) {
+                console.error("Failed to fetch masters:", error);
+            }
+        };
+        fetchMasters();
+
+        const fetchStayBookingMasters = async () => {
+            try {
+                const [bookingTypeRes, bookingSourceRes] = await Promise.all([
+                    api.get('/api/stay-booking-type-masters/'),
+                    api.get('/api/stay-booking-source-masters/')
+                ]);
+                setStayBookingTypes((bookingTypeRes.data || []).map(item => toTitleCase(item.booking_type)));
+                setStayBookingSources((bookingSourceRes.data || []).map(item => toTitleCase(item.source_name)));
+            } catch (error) {
+                console.warn('Could not fetch stay booking masters:', error);
+            }
+        };
+        fetchStayBookingMasters();
+
+        const fetchFoodMasters = async () => {
+            try {
+                const [mealSourceRes, mealProviderRes] = await Promise.all([
+                    api.get('/api/meal-source-masters/'),
+                    api.get('/api/meal-provider-masters/')
+                ]);
+                setMealSources((mealSourceRes.data || []).map(item => toTitleCase(item.source_name)));
+                setMealProviders((mealProviderRes.data || []).map(item => toTitleCase(item.provider_name)));
+            } catch (error) {
+                console.warn('Could not fetch food masters:', error);
+            }
+        };
+        fetchFoodMasters();
+
+        // Fetch fuel rates for 2 Wheeler and 4 Wheeler for current user's state
         const fetchFuelRates = async () => {
             try {
                 const [rate2W, rate4W] = await Promise.all([
@@ -414,15 +524,20 @@ const TripExpenseGrid = ({
                 if (rate2W.data?.rate_per_km) rates['2 Wheeler'] = parseFloat(rate2W.data.rate_per_km);
                 if (rate4W.data?.rate_per_km) rates['4 Wheeler'] = parseFloat(rate4W.data.rate_per_km);
 
+                // Fallback: If my_rate returns null (e.g. state mismatch), fetch general list
                 if (Object.keys(rates).length === 0) {
-                    rates['2 Wheeler'] = 4.5;
-                    rates['4 Wheeler'] = 12.0;
+                    const resAll = await api.get('/api/masters/fuel-rate-masters/');
+                    if (Array.isArray(resAll.data)) {
+                        resAll.data.forEach(item => {
+                            if (item.vehicle_type === '2 Wheeler' && !rates['2 Wheeler']) rates['2 Wheeler'] = parseFloat(item.rate_per_km);
+                            if (item.vehicle_type === '4 Wheeler' && !rates['4 Wheeler']) rates['4 Wheeler'] = parseFloat(item.rate_per_km);
+                        });
+                    }
                 }
 
                 if (Object.keys(rates).length > 0) setFuelRates(rates);
             } catch (err) {
                 console.warn('Could not fetch fuel rates:', err);
-                setFuelRates({ '2 Wheeler': 4.5, '4 Wheeler': 12.0 });
             }
         };
         fetchFuelRates();
@@ -432,8 +547,8 @@ const TripExpenseGrid = ({
     useEffect(() => {
         if (Object.keys(fuelRates).length > 0) {
             setRows(currentRows => currentRows.map(r => {
-                if (r.nature === 'Local Travel' && ['Own Car', 'Own Bike'].includes(r.details.subType)) {
-                    const is4W = r.details.subType === 'Own Car';
+                if (r.nature === 'Local Travel' && ['Own Car', 'Own Bike'].map(s => s.toLowerCase()).includes(r.details.subType ? r.details.subType.toLowerCase() : '')) {
+                    const is4W = r.details.subType && r.details.subType.toLowerCase() === 'own car';
                     const vehicleKey = is4W ? '4 Wheeler' : '2 Wheeler';
                     const rate = fuelRates[vehicleKey];
                     const start = parseFloat(r.details.odoStart || 0);
@@ -509,10 +624,38 @@ const TripExpenseGrid = ({
                     }
                 } catch (e) { }
 
-                if (!details.auditTrail) details.auditTrail = [];
-                if (!details.travelStatus) details.travelStatus = 'Completed';
+                // Re-map top-level DB columns back into details.
+                // These fields were stripped out of `description` JSON during save and stored
+                // as dedicated database columns. We must restore them so the UI can display them.
+                if (!details.mode && exp.travel_mode) details.mode = exp.travel_mode;
+                if (!details.classType && exp.class_type) details.classType = exp.class_type;
+                if (!details.pnr && exp.booking_reference) details.pnr = exp.booking_reference;
+                if (!details.bookingRef && exp.booking_reference) details.bookingRef = exp.booking_reference;
+                if (details.refundable === undefined && exp.refundable_flag !== undefined)
+                    details.refundable = exp.refundable_flag ? 'Yes' : 'No';
+                if (details.mealIncluded === undefined && exp.meal_included_flag !== undefined)
+                    details.mealIncluded = exp.meal_included_flag ? 'Yes' : 'No';
+                // vehicle_type maps to subType for Local Travel and vehicleType for Travel (Intercity Car)
+                if (!details.subType && !details.vehicleType && exp.vehicle_type) {
+                    details.subType = exp.vehicle_type;
+                    details.vehicleType = exp.vehicle_type;
+                }
+                if (!details.odoStart && exp.odo_start != null) details.odoStart = String(exp.odo_start);
+                if (!details.odoEnd && exp.odo_end != null) details.odoEnd = String(exp.odo_end);
+                if (!details.totalKm && exp.distance != null) details.totalKm = String(exp.distance);
+                if (!details.bookedBy && exp.booked_by) details.bookedBy = exp.booked_by;
+                if (!details.cancellationDate && exp.cancellation_date) details.cancellationDate = exp.cancellation_date;
+                if (!details.refundAmount && exp.refund_amount != null) details.refundAmount = String(exp.refund_amount);
+                if (!details.cancellationReason && exp.cancellation_reason) details.cancellationReason = exp.cancellation_reason;
+                // travelStatus from cancellation_status top-level column
+                if (!details.travelStatus) details.travelStatus = exp.cancellation_status || 'Completed';
 
-                const natureVal = exp.category === 'Others' ? 'Travel' : (exp.category === 'Fuel' ? 'Local Travel' : exp.category);
+                if (!details.auditTrail) details.auditTrail = [];
+
+                // Categorization recovery: If it's "Others" (the fallback) but has incidental-specific fields, it's an Incidental.
+                const natureVal = (exp.category === 'Others' && (details.incidentalType || details.incidentalCategory)) 
+                    ? 'Incidental' 
+                    : (exp.category === 'Others' ? 'Travel' : (exp.category === 'Fuel' ? 'Local Travel' : exp.category));
                 // enforce fixed fields for non-TRP trip ids and local travel entries
                 if (isFixedLocal && natureVal === 'Local Travel') {
                     details.mode = 'Bike';
@@ -567,36 +710,17 @@ const TripExpenseGrid = ({
             return false;
         }
 
-        // --- DUPLICATE ENTRY CHECK ---
-        const entrySet = new Set();
-        for (let i = 0; i < rows.length; i++) {
-            const row = rows[i];
-            let key = '';
-            if (row.nature === 'Travel') {
-                key = `Travel|${row.date}|${row.details.mode}|${row.details.origin}|${row.details.destination}|${row.details.pnr || ''}`;
-            } else if (row.nature === 'Local Travel') {
-                key = `Local|${row.date}|${row.details.mode || ''}|${row.details.subType || ''}|${row.details.origin || ''}|${row.details.destination || ''}`;
-            } else if (row.nature === 'Food') {
-                key = `Food|${row.date}|${row.details.mealType || ''}|${row.details.mealCategory || ''}|${row.details.mealSource || ''}|${row.details.provider || ''}`;
-            } else if (row.nature === 'Accommodation') {
-                key = `Hotel|${row.date}|${row.details.hotelName || ''}|${row.details.bookingType || ''}|${row.details.bookingSource || ''}|${row.details.accomType || ''}`;
-            } else if (row.nature === 'Incidental') {
-                key = `Incidental|${row.date}|${row.details.incidentalType}`;
-            } else {
-                key = `Other|${row.nature}|${row.date}|${row.amount}|${row.remarks}`;
-            }
-
-            if (entrySet.has(key)) {
-                showToast(`Duplicate entry detected at row #${i + 1}. Please remove or modify unique details like PNR or Route.`, "error");
-                return false;
-            }
-            entrySet.add(key);
-        }
-
         // --- PRE-FLIGHT VALIDATION ---
         for (let i = 0; i < rows.length; i++) {
             const row = rows[i];
             const rowNum = i + 1;
+
+            // --- TAB-AWARE VALIDATION ---
+            // If we are not in the 'Review' tab, only validate rows that belong to the active category.
+            // This prevents hidden, incomplete rows in other tabs from blocking the save of the current tab.
+            if (activeCategory !== 'Review' && row.nature !== activeCategory) {
+                continue;
+            }
 
             // DATE RANGE VALIDATION
             if (minDate && maxDate) {
@@ -636,6 +760,13 @@ const TripExpenseGrid = ({
                 showToast(`Item #${rowNum}: Amount can have at most two decimal places.`, "error");
                 return false;
             }
+
+            // REMARKS MIN LENGTH
+            const remarks = (row.remarks || '').trim();
+            if (remarks.length > 0 && remarks.length < 10) {
+                showToast(`Item #${rowNum}: Remarks must be at least 10 characters for auditing.`, "error");
+                return false;
+            }
             // TODO: compare against company policy limit if available
 
 
@@ -664,15 +795,14 @@ const TripExpenseGrid = ({
                     showToast(`Item #${rowNum}: Origin and Destination cannot be the same.`, "error");
                     return false;
                 }
-                const locRegex = /^[A-Za-z ]{2,}$/;
+                const locRegex = /^[A-Za-z0-9 \-\/\(\)\,\.]{2,}$/;
                 if (!locRegex.test(origin) || !locRegex.test(destination)) {
-                    showToast(`Item #${rowNum}: From/To must be at least 2 alphabetic characters.`, "error");
+                    showToast(`Item #${rowNum}: From/To must be at least 2 characters (alphanumeric, -, /, (, ), ,, .).`, "error");
                     return false;
                 }
-                // invoice number validation (alphanumeric, max 30)
-                // carrier name allowed letters and spaces
-                if (row.details.carrier && !/^[A-Za-z ]+$/.test(row.details.carrier)) {
-                    showToast(`Item #${rowNum}: Carrier name may only contain letters and spaces.`, "error");
+                // carrier name allowed letters, spaces, numbers and common symbols
+                if (row.details.carrier && !/^[A-Za-z0-9 \-\.\&\/\,]+$/.test(row.details.carrier)) {
+                    showToast(`Item #${rowNum}: Carrier name may contain letters, numbers, spaces and symbols (-, ., &, /, ,).`, "error");
                     return false;
                 }
 
@@ -716,10 +846,10 @@ const TripExpenseGrid = ({
                     if (!row.details.carrier) { setRowError(row.id, 'carrier', 'Train Name is mandatory.'); return false; }
                     if (!row.details.classType) { setRowError(row.id, 'classType', 'Class is mandatory for Train.'); return false; }
                     const alnum = /^[A-Za-z0-9]+$/;
-                    if (!alnum.test(ticketNo)) { setRowError(row.id, 'ticketNo', 'Ticket Number may only contain letters and numbers.'); return false; }
-                    if (ticketNo.length > 25) { setRowError(row.id, 'ticketNo', 'Ticket Number cannot exceed 25 characters.'); return false; }
-                    if (!alnum.test(pnr)) { setRowError(row.id, 'pnr', 'PNR may only contain letters and numbers.'); return false; }
-                    if (pnr.length < 5 || pnr.length > 15) { setRowError(row.id, 'pnr', 'PNR must be 5-15 characters long.'); return false; }
+                    if (!alnum.test(ticketNo)) { showToast(`Item #${rowNum}: Ticket Number may only contain letters and numbers.`, "error"); return false; }
+                    if (ticketNo.length > 25) { showToast(`Item #${rowNum}: Ticket Number cannot exceed 25 characters.`, "error"); return false; }
+                    if (!alnum.test(pnr)) { showToast(`Item #${rowNum}: PNR / Reference may only contain letters and numbers.`, "error"); return false; }
+                    if (pnr.length < 3 || pnr.length > 20) { showToast(`Item #${rowNum}: PNR must be 3-20 characters long.`, "error"); return false; }
                 } else if (mode === 'Intercity Bus') {
                     if (!row.details.carrier) { setRowError(row.id, 'carrier', 'Bus Operator is mandatory.'); return false; }
                 } else if (mode === 'Intercity Cab') {
@@ -729,33 +859,11 @@ const TripExpenseGrid = ({
 
                 if (isSelfBooked) {
                     // travel-specific requirement
-                    if (row.nature === 'Travel') {
-                        if (row.amount === '' || row.amount <= 0) {
-                            showToast(`${row.nature} Item #${rowNum}: Total Amount is mandatory for Self Booked.`, "error");
-                            return false;
-                        }
-                    }
-                    // local travel also needs positive amount when self-booked
-                    if (row.nature === 'Local Travel') {
-                        if (row.amount === '' || row.amount <= 0) {
-                            showToast(`${row.nature} Item #${rowNum}: Total Amount is mandatory for Self Booked.`, "error");
-                            return false;
-                        }
-                    }
                     if (mode === 'Flight' || mode === 'Intercity Bus' || mode === 'Intercity Cab') {
                         // Ticket/Invoice requirements
                         if (!row.bills || row.bills.length < (mode === 'Intercity Cab' ? 1 : 2)) {
                             showToast(`Item #${rowNum}: Please upload ${mode === 'Intercity Cab' ? 'Invoice' : 'Ticket and Invoice'} for self-booked ${mode.toLowerCase()}.`, "warning");
                         }
-                    }
-                }
-
-                if ((row.bills || []).length > 0) {
-                    const travelInvoiceNumbers = getTravelInvoiceNumbers(row);
-                    const missingInvoice = travelInvoiceNumbers.some(invoice => !invoice || !invoice.trim());
-                    if (missingInvoice) {
-                        showToast(`Item #${rowNum}: Invoice number is required for each uploaded file.`, "error");
-                        return false;
                     }
                 }
 
@@ -781,44 +889,45 @@ const TripExpenseGrid = ({
                         return false;
                     }
                 }
-            }
-
-            if (row.nature === 'Local Travel') {
+            } else if (row.nature === 'Local Travel') {
                 const { mode, subType, odoStart, odoEnd, origin, destination } = row.details;
 
                 // Prevent during active long distance travel
                 const localStart = new Date(row.date + 'T' + (row.timeDetails.boardingTime || '00:00'));
                 const localEnd = new Date((row.endDate || row.date) + 'T' + (row.timeDetails.actualTime || '23:59'));
                 for (let j = 0; j < rows.length; j++) {
-                    const other = rows[j];
-                    if (other.nature === 'Travel') {
-                        if (other.details.depDate && other.details.arrDate) {
-                            const dep = new Date(other.details.depDate + 'T' + (other.timeDetails.boardingTime || '00:00'));
-                            const arr = new Date(other.details.arrDate + 'T' + (other.timeDetails.actualTime || '23:59'));
-                            if (localStart >= dep && localStart <= arr) {
-                                showToast(`Item #${rowNum}: Cannot record local conveyance during active long-distance travel period.`, "error");
-                                return false;
-                            }
+                    const r2 = rows[j];
+                    if (r2.nature === 'Travel' && r2.id !== row.id) {
+                        const tStart = new Date((r2.details.depDate || r2.date) + 'T' + (r2.timeDetails.boardingTime || '00:00'));
+                        const tEnd = new Date((r2.details.arrDate || r2.date) + 'T' + (r2.timeDetails.actualTime || '23:59'));
+                        // If local travel date/time overlaps with a long distance journey
+                        if (localStart >= tStart && localEnd <= tEnd) {
+                            showToast(`Item #${rowNum}: Local Travel overlaps with your ${r2.details.mode} journey (${r2.details.origin} to ${r2.details.destination}).`, "warning");
                         }
                     }
                 }
 
                 if (!mode) {
-                    showToast(`Item #${rowNum}: Please select a Mode for Local Travel.`, "error");
+                    showToast(`Item #${rowNum}: Please select a Local Travel Mode.`, "error");
                     return false;
                 }
-
-                if (mode !== 'Walk' && !subType) {
+                // SubType is mandatory only for Car, Bike, or Auto modes (case-insensitive)
+                const modeLowerCase = mode.toLowerCase();
+                const requiresSubType = modeLowerCase.includes('car') || modeLowerCase.includes('bike') || modeLowerCase === 'auto';
+                if (requiresSubType && !subType) {
                     showToast(`Item #${rowNum}: Please select a Sub-Type for ${mode}.`, "error");
                     return false;
                 }
 
-                // date range validation for local travel
-                if (row.date && row.endDate) {
-                    if (new Date(row.date) > new Date(row.endDate)) {
-                        showToast(`Item #${rowNum}: End Date should be after Start Date.`, "error");
+                if (subType && subType.toLowerCase() === 'ride hailing') {
+                    if (!origin || !destination) {
+                        showToast(`Item #${rowNum}: Pickup and Drop locations are required for Ride Hailing.`, "error");
                         return false;
                     }
+                }
+
+                // date range validation for local travel
+                if (row.date && row.endDate) {
                     // optionally block future dates if needed
                     const today = new Date();
                     if (new Date(row.date) > today || new Date(row.endDate) > today) {
@@ -829,8 +938,8 @@ const TripExpenseGrid = ({
 
                 // location cross-check
                 if (origin && destination && origin.trim().toLowerCase() === destination.trim().toLowerCase()) {
-                    showToast(`Item #${rowNum}: From and To locations cannot be the same.`, "error");
-                    return false;
+                    showToast(`Item #${rowNum}: From and To locations are the same. Please verify.`, "warning");
+                    // removed return false to allow different values that might look similar or same-city travel
                 }
                 // time validations for local travel
                 if ((row.timeDetails.boardingTime && !row.timeDetails.actualTime) || (!row.timeDetails.boardingTime && row.timeDetails.actualTime)) {
@@ -844,7 +953,7 @@ const TripExpenseGrid = ({
                     }
                 }
 
-                if (mode === 'Walk') {
+                if (modeLowerCase === 'walk') {
                     if (parseFloat(row.amount) > 0) {
                         showToast(`Item #${rowNum}: Walk mode cannot have an associated cost.`, "error");
                         return false;
@@ -855,7 +964,7 @@ const TripExpenseGrid = ({
                     }
                 }
 
-                if (subType === 'Own Car') {
+                if (subType && subType.toLowerCase() === 'own car') {
                     if (!odoStart || !odoEnd) {
                         showToast(`Item #${rowNum}: Both start and end odometer readings are required for Own Car.`, "error");
                         return false;
@@ -882,22 +991,25 @@ const TripExpenseGrid = ({
                     }
                 }
 
-                if ((row.bills || []).length > 0) {
-                    const localInvoiceNumbers = getLocalInvoiceNumbers(row);
-                    const missingInvoice = localInvoiceNumbers.some(invoice => !invoice || !invoice.trim());
-                    if (missingInvoice) {
-                        showToast(`Item #${rowNum}: Invoice number is required for each uploaded bill.`, "error");
-                        return false;
-                    }
-                }
-            }
 
-            if (row.nature === 'Food') {
+            } else if (row.nature === 'Food') {
+
                 const mealSource = normalizeMealSource(row.details.mealSource);
                 const isSelfMeal = row.details.mealCategory === 'Self Meal';
                 if (!row.date) { showToast(`Item #${rowNum}: Date is required.`, "error"); return false; }
                 if (!row.details.mealType) { showToast(`Item #${rowNum}: Please select Meal Type.`, "error"); return false; }
                 if (!row.details.mealTime) { showToast(`Item #${rowNum}: Meal Time is required.`, "error"); return false; }
+
+                // MEAL TIME VS TYPE
+                const [mHours, mMins] = (row.details.mealTime || '00:00').split(':').map(Number);
+                const mealTimeVal = mHours + (mMins / 60);
+                if (row.details.mealType === 'Breakfast' && (mealTimeVal < 6 || mealTimeVal > 11)) {
+                    showToast(`Item #${rowNum}: Breakfast time should be between 06:00 and 11:00.`, "warning");
+                } else if (row.details.mealType === 'Lunch' && (mealTimeVal < 12 || mealTimeVal > 16)) {
+                    showToast(`Item #${rowNum}: Lunch time should be between 12:00 and 16:00.`, "warning");
+                } else if (row.details.mealType === 'Dinner' && (mealTimeVal < 19)) {
+                    showToast(`Item #${rowNum}: Dinner time should be after 19:00.`, "warning");
+                }
                 if (!row.details.mealCategory) { showToast(`Item #${rowNum}: Please select Meal Category.`, "error"); return false; }
                 if (isSelfMeal) {
                     if (!row.details.mealSource) { showToast(`Item #${rowNum}: Please select Meal Source.`, "error"); return false; }
@@ -910,17 +1022,31 @@ const TripExpenseGrid = ({
                     showToast(`Item #${rowNum}: Amount must be 0 for Client Hosted and Working Meal.`, "error");
                     return false;
                 }
-                if ((row.bills || []).length > 0) {
-                    const foodInvoiceNumbers = getFoodInvoiceNumbers(row);
-                    const missingInvoice = foodInvoiceNumbers.some(invoice => !invoice || !invoice.trim());
-                    if (missingInvoice) {
-                        showToast(`Item #${rowNum}: Invoice number is required for each uploaded bill.`, "error");
-                        return false;
+
+                // Cross-row duplicate meal check
+                if (['Breakfast', 'Lunch', 'Dinner'].includes(row.details.mealType)) {
+                    for (const r2 of rows) {
+                        if (r2.id !== row.id && r2.nature === 'Food' && r2.date === row.date && r2.details.mealType === row.details.mealType) {
+                            showToast(`Item #${rowNum}: A ${row.details.mealType} entry already exists for ${row.date}. Only one allowed per day.`, "error");
+                            return false;
+                        }
                     }
                 }
-            }
 
-            if (row.nature === 'Accommodation') {
+                // Check if meal already included in travel booking
+                const mealDate = new Date(row.date);
+                const isMealIncludedInTravel = rows.some(r2 =>
+                    r2.nature === 'Travel' &&
+                    r2.details.meal_included_flag &&
+                    new Date(r2.details.depDate || r2.date) <= mealDate &&
+                    new Date(r2.details.arrDate || r2.date) >= mealDate
+                );
+
+                if (isMealIncludedInTravel && ['Breakfast', 'Lunch', 'Dinner'].includes(row.details.mealType)) {
+                    showToast(`Item #${rowNum}: ${row.details.mealType} is already included in your travel booking for this date.`, "warning");
+                }
+
+            } else if (row.nature === 'Accommodation') {
                 const scheduledCheckInDate = row.details.scheduledCheckInDate || row.details.checkIn;
                 const scheduledCheckInTime = row.details.scheduledCheckInTime || row.details.checkInTime;
                 const scheduledCheckOutDate = row.details.scheduledCheckOutDate || row.details.checkOut;
@@ -950,7 +1076,8 @@ const TripExpenseGrid = ({
                     showToast(`Item #${rowNum}: Please select a Stay Type.`, "error");
                     return false;
                 }
-                if (!['No Stay', 'Self Stay'].includes(row.details.accomType) && !row.details.hotelName) {
+                const needsHotelName = ['Hotel Stay', 'Guest House'].includes(row.details.accomType);
+                if (needsHotelName && !row.details.hotelName) {
                     showToast(`Item #${rowNum}: Please provide the Hotel/Guest House name.`, "error");
                     return false;
                 }
@@ -962,17 +1089,40 @@ const TripExpenseGrid = ({
                     showToast(`Item #${rowNum}: Amount must be greater than 0.`, "error");
                     return false;
                 }
-                if ((row.bills || []).length > 0) {
-                    const accommodationInvoiceNumbers = getAccommodationInvoiceNumbers(row);
-                    const missingInvoice = accommodationInvoiceNumbers.some(invoice => !invoice || !invoice.trim());
-                    if (missingInvoice) {
-                        showToast(`Item #${rowNum}: Invoice number is required for each uploaded bill.`, "error");
-                        return false;
+
+                // STAY DURATION VS COST
+                if (actualCheckInDate && actualCheckOutDate) {
+                    const diffDays = Math.ceil((new Date(actualCheckOutDate) - new Date(actualCheckInDate)) / (1000 * 60 * 60 * 24));
+                    const dailyCost = parseFloat(row.amount) / (diffDays || 1);
+                    if (dailyCost < 100) {
+                        showToast(`Item #${rowNum}: Daily stay cost seems unusually low (₹${dailyCost.toFixed(2)}). Please verify.`, "warning");
+                    }
+
+                    // Overlap check
+                    const currentStart = new Date(actualCheckInDate + 'T' + actualCheckInTime);
+                    const currentEnd = new Date(actualCheckOutDate + 'T' + actualCheckOutTime);
+
+                    for (const r2 of rows) {
+                        if (r2.id !== row.id && r2.nature === 'Accommodation') {
+                            const r2In = r2.details.actualCheckInDate || r2.details.checkIn;
+                            const r2InT = r2.details.actualCheckInTime || r2.details.checkInTime;
+                            const r2Out = r2.details.actualCheckOutDate || r2.details.checkOut;
+                            const r2OutT = r2.details.actualCheckOutTime || r2.details.checkOutTime;
+
+                            if (r2In && r2InT && r2Out && r2OutT) {
+                                const otherStart = new Date(r2In + 'T' + r2InT);
+                                const otherEnd = new Date(r2Out + 'T' + r2OutT);
+
+                                if (currentStart < otherEnd && currentEnd > otherStart) {
+                                    showToast(`Item #${rowNum}: Stay period overlaps with item at ${r2In}.`, "error");
+                                    return false;
+                                }
+                            }
+                        }
                     }
                 }
-            }
 
-            if (row.nature === 'Incidental') {
+            } else if (row.nature === 'Incidental') {
                 if (!row.date) {
                     showToast(`Item #${rowNum}: Date is mandatory for incidental expenses.`, "error");
                     return false;
@@ -998,52 +1148,150 @@ const TripExpenseGrid = ({
                     return false;
                 }
                 if (isIncidentalOthersType(row.details.incidentalType)) {
-                    if (countWords(row.details.otherReason) < 5) { showToast(`Item #${rowNum}: Reason must be at least 5 words.`, "error"); return false; }
-                    if (!row.details.notes || !row.details.notes.trim()) { showToast(`Item #${rowNum}: Remarks are required for 'Others'.`, "error"); return false; }
-                    if (countWords(row.details.notes) > 50) { showToast(`Item #${rowNum}: Remarks can have up to 50 words.`, "error"); return false; }
+                    const reasonWordCount = countWords(row.details.otherReason);
+                    if (reasonWordCount < 1 || reasonWordCount > 6) {
+                        showToast(`Item #${rowNum}: Reason must be between 1 and 6 words.`, "error");
+                        return false;
+                    }
+                    const remarksWordCount = countWords(row.details.notes);
+                    if (remarksWordCount < 1 || remarksWordCount > 50) {
+                        showToast(`Item #${rowNum}: Remarks must be between 1 and 50 words.`, "error");
+                        return false;
+                    }
                 }
-                if ((row.bills || []).length > 0) {
-                    const invoiceNumbers = getIncidentalInvoiceNumbers(row);
-                    const missingInvoice = invoiceNumbers.some(invoice => !invoice || !invoice.trim());
-                    if (missingInvoice) {
-                        showToast(`Item #${rowNum}: Invoice number is required for each uploaded bill.`, "error");
+                if (row.details.incidentalType === 'Porter Charges' && !hasAdditionalLuggage) {
+                    showToast(`Item #${rowNum}: Porter Charges are only allowed if "Additional Luggage" was checked in the Trip Story.`, "error");
+                    return false;
+                }
+
+                // --- DUPLICATE CHECK ---
+                // Only check for duplicates if this row is not yet saved or has been modified
+                if (!row.isSaved) {
+                    const isDuplicate = rows.some(r => {
+                        if (r.id === row.id) return false;
+                        if (r.nature !== 'Incidental') return false;
+
+                        const isSameDateTimeType =
+                            r.date === row.date &&
+                            (r.details?.incidentalTime || "").trim() === (row.details.incidentalTime || "").trim() &&
+                            (r.details?.incidentalType || "").trim().toLowerCase() === (row.details.incidentalType || "").trim().toLowerCase();
+
+                        if (!isSameDateTimeType) return false;
+
+                        if (isIncidentalOthersType(row.details.incidentalType)) {
+                            return (r.details?.otherReason || "").trim().toLowerCase() === (row.details.otherReason || "").trim().toLowerCase();
+                        }
+
+                        return true;
+                    });
+
+                    if (isDuplicate) {
+                        showToast("Duplicate entry not allowed", "error");
                         return false;
                     }
                 }
             }
         }
 
-        // Overlap Validation (Simplified: check if multiple travel segments have same start date)
-        const travelRows = rows.filter(r => r.nature === 'Travel');
-        const dates = travelRows.map(r => r.date);
-        const hasOverlap = new Set(dates).size !== dates.length;
-        if (hasOverlap) {
-            // Further check could be done for time, but date level is a good start as per "No overlapping segments"
-            const confirmOverlap = await confirm("Warning: Overlapping travel segments detected on the same date. Continue?");
-            if (!confirmOverlap) return false;
+        // Overlap & Continuity Validations
+        const sortedRows = [...rows].sort((a, b) => new Date(a.date + 'T' + (a.timeDetails?.boardingTime || a.details?.mealTime || a.details?.incidentalTime || '00:00')) - new Date(b.date + 'T' + (b.timeDetails?.boardingTime || b.details?.mealTime || b.details?.incidentalTime || '00:00')));
+
+        // BACK-TO-BACK TRAVEL & ODO CONTINUITY
+        let lastTravel = null;
+        let lastOdoEnd = -1;
+        let lastStayEnd = null;
+
+        for (const row of sortedRows) {
+            const rowNum = rows.findIndex(r => r.id === row.id) + 1;
+
+            if (row.nature === 'Travel') {
+                if (lastTravel) {
+                    const lastArr = new Date((lastTravel.details.arrDate || lastTravel.date) + 'T' + (lastTravel.timeDetails.actualTime || '23:59'));
+                    const curDep = new Date((row.details.depDate || row.date) + 'T' + (row.timeDetails.boardingTime || '00:00'));
+                    if (curDep < lastArr) {
+                        showToast(`Back-to-back travel error: Segment starting on ${row.date} begins before previous segment ends.`, "error");
+                        return false;
+                    }
+                }
+                lastTravel = row;
+
+                // Night Halt Validation for Intercity Car
+                if (row.details.mode === 'Intercity Car' && parseFloat(row.details.nightHaltCharges || 0) > 0) {
+                    const dep = new Date((row.details.depDate || row.date) + 'T' + (row.timeDetails.boardingTime || '00:00'));
+                    const arr = new Date((row.details.arrDate || row.date) + 'T' + (row.timeDetails.actualTime || '23:59'));
+                    const diffHours = (arr - dep) / (1000 * 60 * 60);
+                    if (diffHours < 8 && row.details.depDate === row.details.arrDate) {
+                        showToast(`Item #${rowNum}: Night Halt charges usually apply for overnight journeys or long durations.`, "warning");
+                    }
+                }
+            }
+
+            if (row.nature === 'Local Travel' && row.details.subType === 'Own Car') {
+                const curStart = parseFloat(row.details.odoStart || 0);
+                const curEnd = parseFloat(row.details.odoEnd || 0);
+                if (lastOdoEnd !== -1 && curStart < lastOdoEnd) {
+                    showToast(`ODO Continuity Warning: Start ODO (${curStart}) at row #${rowNum} is less than previous End ODO (${lastOdoEnd}).`, "warning");
+                }
+                lastOdoEnd = curEnd;
+            }
+
+            if (row.nature === 'Accommodation') {
+                const curIn = new Date((row.details.actualCheckInDate || row.details.checkIn) + 'T' + (row.details.actualCheckInTime || row.details.checkInTime || '00:00'));
+                const curOut = new Date((row.details.actualCheckOutDate || row.details.checkOut) + 'T' + (row.details.actualCheckOutTime || row.details.checkOutTime || '23:59'));
+                if (lastStayEnd && curIn < lastStayEnd) {
+                    showToast(`Accommodation Overlap: Stay at ${row.details.hotelName} starts before previous stay ends.`, "error");
+                    return false;
+                }
+                lastStayEnd = curOut;
+            }
         }
 
-        // Meal overlap validation
-        for (const row of rows) {
-            if (row.nature === 'Food') {
-                const hasMealBenefit = rows.some(r => r.nature === 'Travel' && r.date === row.date && r.details.mealIncluded);
-                if (hasMealBenefit) {
-                    const confirmMeal = await confirm(`Warning: You marked "Meal Included" for travel on ${row.date}. Separate meal claims for this day might be blocked. Continue?`);
-                    if (!confirmMeal) return false;
+        // Refined Meal overlap validation
+        for (const foodRow of rows) {
+            if (foodRow.nature === 'Food' && foodRow.details.mealCategory === 'Self Meal') {
+                const foodTime = foodRow.details.mealTime;
+                const foodDate = foodRow.date;
+                if (!foodTime || !foodDate) continue;
+
+                for (const travelRow of rows) {
+                    if (travelRow.nature === 'Travel' && travelRow.details.mealIncluded === 'Yes') {
+                        const depDate = travelRow.details.depDate || travelRow.date;
+                        const arrDate = travelRow.details.arrDate || travelRow.date;
+                        const depTime = travelRow.timeDetails?.boardingTime;
+                        const arrTime = travelRow.timeDetails?.actualTime;
+
+                        if (depDate && arrDate && depTime && arrTime) {
+                            try {
+                                const foodStart = new Date(`${foodDate}T${foodTime}`);
+                                const travelStart = new Date(`${depDate}T${depTime}`);
+                                const travelEnd = new Date(`${arrDate}T${arrTime}`);
+
+                                // If food time falls within travel window where meal was provided
+                                if (foodStart >= travelStart && foodStart <= travelEnd) {
+                                    showToast(`Item #${rows.indexOf(foodRow) + 1}: Meal duplication! You are claiming "${foodRow.details.mealType}" at ${foodTime} but your ${travelRow.details.mode} journey (${travelRow.details.origin} to ${travelRow.details.destination}) already includes meals for this period.`, "error");
+                                    return false;
+                                }
+                            } catch (e) { console.error("Meal overlap calculate error", e); }
+                        }
+                    }
                 }
             }
         }
 
         setIsSaving(true);
         try {
-            const newRows = rows.filter(r => !r.isSaved);
+            // Include ALL rows for the current category so edits to existing rows are also saved.
+            // (Unless it's Final Review, where we save all categories).
+            const rowsToSave = activeCategory === 'Final Review' 
+                ? rows 
+                : rows.filter(r => r.nature === activeCategory);
 
-            if (newRows.length === 0) {
+            if (rowsToSave.length === 0) {
                 setIsSaving(false);
                 return true;
             }
 
-            for (const row of newRows) {
+            for (const row of rowsToSave) {
                 const categoryMap = {
                     'Travel': 'Others',
                     'Local Travel': 'Fuel',
@@ -1053,10 +1301,19 @@ const TripExpenseGrid = ({
                 };
 
                 const filteredDetails = { ...row.details };
+                // Remove redundant fields already captured in top-level payload columns
+                [
+                    'mode', 'classType', 'pnr', 'bookingRef', 'refundable', 'mealIncluded',
+                    'subType', 'vehicleType', 'odoStart', 'odoEnd', 'totalKm',
+                    'travelStatus', 'cancellationDate', 'refundAmount', 'cancellationReason', 'bookedBy'
+                ].forEach(field => delete filteredDetails[field]);
+
                 if (row.nature === 'Local Travel') {
                     const { mode, subType } = row.details;
+                    const modeLower = mode ? mode.toLowerCase() : '';
+                    const subTypeLower = subType ? subType.toLowerCase() : '';
                     // Remove fields not applicable for current mode/subtype
-                    if (mode === 'Walk') {
+                    if (modeLower === 'walk') {
                         delete filteredDetails.toll;
                         delete filteredDetails.parking;
                         delete filteredDetails.fuel;
@@ -1064,14 +1321,14 @@ const TripExpenseGrid = ({
                         delete filteredDetails.odoEnd;
                         delete filteredDetails.totalKm;
                     }
-                    if (mode === 'Public Transport') {
+                    if (modeLower === 'public transport') {
                         delete filteredDetails.odoStart;
                         delete filteredDetails.odoEnd;
                         delete filteredDetails.fuel;
                         delete filteredDetails.toll;
                         delete filteredDetails.parking;
                     }
-                    if (!['Own Car', 'Self Drive Rental', 'Own Bike'].includes(subType)) {
+                    if (!['own car', 'self drive rental', 'own bike'].map(s => s.toLowerCase()).includes(subTypeLower)) {
                         delete filteredDetails.odoStart;
                         delete filteredDetails.odoEnd;
                     }
@@ -1132,7 +1389,7 @@ const TripExpenseGrid = ({
                     class_type: row.nature === 'Travel' ? row.details.classType : null,
                     booking_reference: row.nature === 'Travel' ? (row.details.pnr || row.details.bookingRef) : null,
                     refundable_flag: row.nature === 'Travel' ? row.details.refundable === 'Yes' : false,
-                    meal_included_flag: row.nature === 'Travel' ? row.details.mealIncluded === true : false,
+                    meal_included_flag: row.nature === 'Travel' ? (row.details.mealIncluded === 'Yes' || row.details.mealIncluded === true) : false,
                     vehicle_type: (row.nature === 'Travel' || row.nature === 'Local Travel') ? (row.details.subType || row.details.vehicleType) : null,
                     odo_start: ((row.nature === 'Travel' || row.nature === 'Local Travel') && row.details.odoStart) ? parseFloat(row.details.odoStart) : null,
                     odo_end: ((row.nature === 'Travel' || row.nature === 'Local Travel') && row.details.odoEnd) ? parseFloat(row.details.odoEnd) : null,
@@ -1147,8 +1404,7 @@ const TripExpenseGrid = ({
                     description: JSON.stringify({
                         ...filteredDetails,
                         remarks: row.remarks ? row.remarks.trim() : '',
-                        time: row.timeDetails,
-                        natureOfVisit: row.details.natureOfVisit ? row.details.natureOfVisit.trim() : ''
+                        time: row.timeDetails
                     }),
                     receipt_image: JSON.stringify(row.bills || []),
                 };
@@ -1170,57 +1426,12 @@ const TripExpenseGrid = ({
                     }
                 }
 
-                // Itemized Local Incidentals - Create separate records for accurate accounting
-                if (row.nature === 'Local Travel' && row.details.localIncidentals && row.details.localIncidentals.length > 0 && !row.isSaved) {
-                    try {
-                        for (const inc of row.details.localIncidentals) {
-                            if (inc.type && inc.amount && parseFloat(inc.amount) > 0) {
-                                await api.post('/api/expenses/', {
-                                    trip: tripId,
-                                    date: row.date,
-                                    category: 'Incidental',
-                                    amount: parseFloat(inc.amount),
-                                    description: JSON.stringify({
-                                        incidentalType: inc.type || 'Misc',
-                                        notes: `Added during local travel: ${row.details.origin || 'Start'} to ${row.details.destination || 'End'}`
-                                    }),
-                                    receipt_image: '[]',
-                                });
-                            }
-                        }
-                        row.details.localIncidentals = []; // Clear so it doesn't duplicate
-                    } catch (e) {
-                        console.error("Failed to save itemized incidentals:", e);
-                    }
-                }
-
-                // Itemized Travel Incidentals - Create separate records for accurate accounting
-                if (row.nature === 'Travel' && row.details.travelIncidentals && row.details.travelIncidentals.length > 0 && !row.isSaved) {
-                    try {
-                        for (const inc of row.details.travelIncidentals) {
-                            if (inc.type && inc.amount && parseFloat(inc.amount) > 0) {
-                                await api.post('/api/expenses/', {
-                                    trip: tripId,
-                                    date: row.date,
-                                    category: 'Incidental',
-                                    amount: parseFloat(inc.amount),
-                                    description: JSON.stringify({
-                                        incidentalType: inc.type || 'Misc',
-                                        notes: `Added during travel: ${row.details.origin || 'Start'} to ${row.details.destination || 'End'}`
-                                    }),
-                                    receipt_image: '[]',
-                                });
-                            }
-                        }
-                        row.details.travelIncidentals = []; // Clear
-                    } catch (e) {
-                        console.error("Failed to save travel itemized incidentals:", e);
-                    }
-                }
+                // Note: We NO LONGER split incidentals into separate standalone records here.
+                // They remain inside the description JSON to prevent "disappearing" from cards.
             }
 
             showToast("Registry committed successfully!", "success");
-            if (onUpdate) onUpdate();
+            if (onUpdate) onUpdate(true);
 
             setRows(rows.map(r => ({ ...r, isSaved: true })));
             return true;
@@ -1231,7 +1442,6 @@ const TripExpenseGrid = ({
             showToast(errorMsg, "error");
             return false;
         } finally {
-            setIsSaving(true);
             setTimeout(() => setIsSaving(false), 500);
         }
     };
@@ -1310,7 +1520,6 @@ const TripExpenseGrid = ({
             nature: targetNature,
             remarks: '',
             details: {
-                segmentId: `SEG-${Math.random().toString(36).substr(2, 6).toUpperCase()}`,
                 auditTrail: [],
                 bookedBy: 'Self Booked', // Default
                 travelStatus: 'Completed',
@@ -1353,7 +1562,12 @@ const TripExpenseGrid = ({
                 type: 'danger',
                 onConfirm: async () => {
                     try {
-                        await api.delete(`/api/expenses/${id}/`);
+                        // FRONTEND-ONLY WORKAROUND:
+                        // Backend ExpenseViewSet omits 'delete' from allowed methods, causing 405.
+                        // However, Expense model supports SoftDelete (is_deleted flag).
+                        // We use PATCH to set is_deleted: true, which achieves the same result
+                        // as the backend filters out is_deleted=True by default.
+                        await api.patch(`/api/expenses/${id}/`, { is_deleted: true });
                         showToast("Entry removed from registry", "success");
                         setRows(prevRows => prevRows.filter(r => r.id !== id));
                         if (onUpdate) onUpdate();
@@ -1433,6 +1647,21 @@ const TripExpenseGrid = ({
         const billCount = (row.bills || []).length;
         if (billCount === 0) return storedInvoices;
         return Array.from({ length: billCount }, (_, index) => storedInvoices[index] || '');
+    };
+
+    const calculateJourneyDuration = (depDate, depTime, arrDate, arrTime) => {
+        if (!depDate || !depTime || !arrDate || !arrTime) return "N/A";
+        try {
+            const start = new Date(`${depDate}T${depTime}`);
+            const end = new Date(`${arrDate}T${arrTime}`);
+            const diffMs = end - start;
+            if (diffMs < 0) return "Invalid (Dep > Arr)";
+            const diffHrs = Math.floor(diffMs / (1000 * 60 * 60));
+            const diffMins = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+            return `${diffHrs}h ${diffMins}m`;
+        } catch (e) {
+            return "Error";
+        }
     };
 
     const syncTravelInvoiceNumbers = (row, billCount) => {
@@ -1596,7 +1825,13 @@ const TripExpenseGrid = ({
         setRows(currentRows => currentRows.map(r => {
             if (r.id === rowId) {
                 const currentList = r.details.localIncidentals || [];
-                return { ...r, details: { ...r.details, localIncidentals: [...currentList, { type: '', amount: '' }] } };
+                const newList = [...currentList, { type: '', amount: '' }];
+                // Recalculate total
+                const fuelAmt = parseFloat(r.details.fuelAmount || 0);
+                const tollAmt = parseFloat(r.details.tollAmount || 0);
+                const itemizedSum = newList.reduce((sum, item) => sum + parseFloat(item.amount || 0), 0);
+                const total = (fuelAmt + tollAmt + itemizedSum).toFixed(2);
+                return { ...r, amount: total, isSaved: false, details: { ...r.details, localIncidentals: newList } };
             }
             return r;
         }));
@@ -1617,7 +1852,7 @@ const TripExpenseGrid = ({
                 const tollAmt = parseFloat(r.details.tollAmount || 0);
                 const itemizedSum = newList.reduce((sum, item) => sum + parseFloat(item.amount || 0), 0);
                 const total = (fuelAmt + tollAmt + itemizedSum).toFixed(2);
-                return { ...r, amount: total, details: { ...r.details, localIncidentals: newList } };
+                return { ...r, amount: total, isSaved: false, details: { ...r.details, localIncidentals: newList } };
             }
             return r;
         }));
@@ -1631,7 +1866,7 @@ const TripExpenseGrid = ({
                 const tollAmt = parseFloat(r.details.tollAmount || 0);
                 const itemizedSum = newList.reduce((sum, item) => sum + parseFloat(item.amount || 0), 0);
                 const total = (fuelAmt + tollAmt + itemizedSum).toFixed(2);
-                return { ...r, amount: total, details: { ...r.details, localIncidentals: newList } };
+                return { ...r, amount: total, isSaved: false, details: { ...r.details, localIncidentals: newList } };
             }
             return r;
         }));
@@ -1641,7 +1876,12 @@ const TripExpenseGrid = ({
         setRows(currentRows => currentRows.map(r => {
             if (r.id === rowId) {
                 const currentList = r.details.travelIncidentals || [];
-                return { ...r, details: { ...r.details, travelIncidentals: [...currentList, { type: '', amount: '' }] } };
+                const newList = [...currentList, { type: '', amount: '' }];
+                // Recalculate total
+                const ticketAmt = parseFloat(r.details.ticketAmount || 0);
+                const itemizedSum = newList.reduce((sum, item) => sum + parseFloat(item.amount || 0), 0);
+                const total = (ticketAmt + itemizedSum).toFixed(2);
+                return { ...r, amount: total, isSaved: false, details: { ...r.details, travelIncidentals: newList } };
             }
             return r;
         }));
@@ -1655,7 +1895,7 @@ const TripExpenseGrid = ({
                 const ticketAmt = parseFloat(r.details.ticketAmount || 0);
                 const itemizedSum = newList.reduce((sum, item) => sum + parseFloat(item.amount || 0), 0);
                 const total = (ticketAmt + itemizedSum).toFixed(2);
-                return { ...r, amount: total, details: { ...r.details, travelIncidentals: newList } };
+                return { ...r, amount: total, isSaved: false, details: { ...r.details, travelIncidentals: newList } };
             }
             return r;
         }));
@@ -1668,7 +1908,7 @@ const TripExpenseGrid = ({
                 const ticketAmt = parseFloat(r.details.ticketAmount || 0);
                 const itemizedSum = newList.reduce((sum, item) => sum + parseFloat(item.amount || 0), 0);
                 const total = (ticketAmt + itemizedSum).toFixed(2);
-                return { ...r, amount: total, details: { ...r.details, travelIncidentals: newList } };
+                return { ...r, amount: total, isSaved: false, details: { ...r.details, travelIncidentals: newList } };
             }
             return r;
         }));
@@ -1727,7 +1967,7 @@ const TripExpenseGrid = ({
             const mode = detailField === 'mode' ? value : (currentRow.details.mode || '');
             const subType = detailField === 'subType' ? value : (currentRow.details.subType || '');
 
-            if (from.trim().length > 2 && to.trim().length > 2 && mode === 'Car' && ['Own Car', 'Company Car'].includes(subType)) {
+            if (from.trim().length > 2 && to.trim().length > 2 && mode.toLowerCase() === 'car' && ['Own Car', 'Company Car'].map(s => s.toLowerCase()).includes(subType.toLowerCase())) {
                 lookupTollAmount(id, from.trim(), to.trim());
             }
         }
@@ -1857,13 +2097,15 @@ const TripExpenseGrid = ({
                     }
                 }
 
-                if (detailField === 'bookedBy' && row.nature === 'Travel') {
-                    if (value === 'Company Booked') {
-                        newDetails.reimbursement_eligible = false;
-                        updatedAmount = '0';
-                    } else {
-                        newDetails.reimbursement_eligible = true;
-                    }
+                if (row.nature === 'Travel' && newDetails.bookedBy !== 'Company Booked') {
+                    const ticketAmt = parseFloat(newDetails.ticketAmount || 0);
+                    const itemizedSum = (newDetails.travelIncidentals || []).reduce((sum, item) => sum + parseFloat(item.amount || 0), 0);
+                    updatedAmount = (ticketAmt + itemizedSum).toFixed(2);
+                } else if (row.nature === 'Local Travel') {
+                    const fuelAmt = parseFloat(newDetails.fuelAmount || 0);
+                    const tollAmt = parseFloat(newDetails.tollAmount || 0);
+                    const itemizedSum = (newDetails.localIncidentals || []).reduce((sum, item) => sum + parseFloat(item.amount || 0), 0);
+                    updatedAmount = (fuelAmt + tollAmt + itemizedSum).toFixed(2);
                 }
 
                 return { ...row, date: updatedDate, details: newDetails, amount: updatedAmount, isSaved: false };
@@ -2020,90 +2262,109 @@ const TripExpenseGrid = ({
             () => setIsLocating(false),
             { enableHighAccuracy: true }
         );
-    };
+    }; const handleFileUpload = (id, files) => {
+        const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'application/pdf'];
+        const MAX_SIZE = 5 * 1024 * 1024; // 5MB
 
-    const handleFileUpload = (id, files) => {
-        const validFiles = Array.from(files || []).filter(Boolean);
+        const validFiles = Array.from(files || []).filter(file => {
+            if (!ALLOWED_TYPES.includes(file.type)) {
+                showToast(`File "${file.name}" is not allowed. Only JPG, PNG, and PDF are permitted.`, "error");
+                return false;
+            }
+            if (file.size > MAX_SIZE) {
+                showToast(`File "${file.name}" exceeds the 5MB limit.`, "error");
+                return false;
+            }
+            return true;
+        });
+
         if (validFiles.length === 0) return;
 
         Promise.all(validFiles.map(file => new Promise((resolve) => {
             const reader = new FileReader();
-            reader.onloadend = () => resolve(reader.result);
+            reader.onloadend = () => resolve({ name: file.name, data: reader.result });
             reader.readAsDataURL(file);
-        }))).then((uploadedBills) => {
-            setRows(prevRows => prevRows.map(row => {
-                if (row.id === id) {
-                    const currentBills = row.bills || [];
-                    const nextBills = [...currentBills, ...uploadedBills];
-                    if (row.nature === 'Travel') {
-                        const travelInvoiceNumbers = syncTravelInvoiceNumbers(row, nextBills.length);
-                        return {
-                            ...row,
-                            bills: nextBills,
-                            details: {
-                                ...row.details,
-                                travelInvoiceNumbers,
-                                invoiceNo: travelInvoiceNumbers[0] || ''
-                            },
-                            isSaved: false
-                        };
+        }))).then((newFiles) => {
+            setRows(prevRows => {
+                const newBillData = newFiles.map(f => f.data);
+
+                return prevRows.map(row => {
+                    if (row.id === id) {
+                        const currentBills = row.bills || [];
+                        // Still prevent duplicates within the SAME row to avoid UI clutter
+                        const filteredNewBills = newBillData.filter(data => !currentBills.includes(data));
+                        const nextBills = [...currentBills, ...filteredNewBills];
+
+                        if (row.nature === 'Travel') {
+                            const travelInvoiceNumbers = syncTravelInvoiceNumbers(row, nextBills.length);
+                            return {
+                                ...row,
+                                bills: nextBills,
+                                details: {
+                                    ...row.details,
+                                    travelInvoiceNumbers,
+                                    invoiceNo: travelInvoiceNumbers[0] || ''
+                                },
+                                isSaved: false
+                            };
+                        }
+                        if (row.nature === 'Local Travel') {
+                            const localInvoiceNumbers = syncLocalInvoiceNumbers(row, nextBills.length);
+                            return {
+                                ...row,
+                                bills: nextBills,
+                                details: {
+                                    ...row.details,
+                                    localInvoiceNumbers,
+                                    invoiceNo: localInvoiceNumbers[0] || ''
+                                },
+                                isSaved: false
+                            };
+                        }
+                        if (row.nature === 'Food') {
+                            const foodInvoiceNumbers = syncFoodInvoiceNumbers(row, nextBills.length);
+                            return {
+                                ...row,
+                                bills: nextBills,
+                                details: {
+                                    ...row.details,
+                                    foodInvoiceNumbers,
+                                    invoiceNo: foodInvoiceNumbers[0] || ''
+                                },
+                                isSaved: false
+                            };
+                        }
+                        if (row.nature === 'Incidental') {
+                            const invoiceNumbers = syncIncidentalInvoiceNumbers(row, nextBills.length);
+                            return {
+                                ...row,
+                                bills: nextBills,
+                                details: {
+                                    ...row.details,
+                                    invoiceNumbers,
+                                    invoiceNo: invoiceNumbers[0] || ''
+                                },
+                                isSaved: false
+                            };
+                        }
+                        if (row.nature === 'Accommodation') {
+                            const accommodationInvoiceNumbers = syncAccommodationInvoiceNumbers(row, nextBills.length);
+                            return {
+                                ...row,
+                                bills: nextBills,
+                                details: {
+                                    ...row.details,
+                                    accommodationInvoiceNumbers,
+                                    invoiceNo: accommodationInvoiceNumbers[0] || ''
+                                },
+                                isSaved: false
+                            };
+                        }
+                        return { ...row, bills: nextBills, isSaved: false };
                     }
-                    if (row.nature === 'Local Travel') {
-                        const localInvoiceNumbers = syncLocalInvoiceNumbers(row, nextBills.length);
-                        return {
-                            ...row,
-                            bills: nextBills,
-                            details: {
-                                ...row.details,
-                                localInvoiceNumbers,
-                                invoiceNo: localInvoiceNumbers[0] || ''
-                            },
-                            isSaved: false
-                        };
-                    }
-                    if (row.nature === 'Food') {
-                        const foodInvoiceNumbers = syncFoodInvoiceNumbers(row, nextBills.length);
-                        return {
-                            ...row,
-                            bills: nextBills,
-                            details: {
-                                ...row.details,
-                                foodInvoiceNumbers,
-                                invoiceNo: foodInvoiceNumbers[0] || ''
-                            },
-                            isSaved: false
-                        };
-                    }
-                    if (row.nature === 'Incidental') {
-                        const invoiceNumbers = syncIncidentalInvoiceNumbers(row, nextBills.length);
-                        return {
-                            ...row,
-                            bills: nextBills,
-                            details: {
-                                ...row.details,
-                                invoiceNumbers,
-                                invoiceNo: invoiceNumbers[0] || ''
-                            },
-                            isSaved: false
-                        };
-                    }
-                    if (row.nature === 'Accommodation') {
-                        const accommodationInvoiceNumbers = syncAccommodationInvoiceNumbers(row, nextBills.length);
-                        return {
-                            ...row,
-                            bills: nextBills,
-                            details: {
-                                ...row.details,
-                                accommodationInvoiceNumbers,
-                                invoiceNo: accommodationInvoiceNumbers[0] || ''
-                            },
-                            isSaved: false
-                        };
-                    }
-                    return { ...row, bills: nextBills, isSaved: false };
-                }
-                return row;
-            }));
+                    return row;
+                });
+            });
         });
     };
 
@@ -2250,7 +2511,7 @@ const TripExpenseGrid = ({
                                         <label>Expense Type *</label>
                                         <select className="cat-input" value={row.details.incidentalType || ''} onChange={e => updateDetails(row.id, 'incidentalType', e.target.value)} disabled={isLocked}>
                                             <option value="">Select Type</option>
-                                            {generalIncidentalTypes.map(t => (
+                                            {generalIncidentalTypes.filter(t => !['Porter Charges', 'Porter'].includes(t) || hasAdditionalLuggage).map(t => (
                                                 <option key={t} value={t}>{t}</option>
                                             ))}
                                         </select>
@@ -2348,20 +2609,11 @@ const TripExpenseGrid = ({
                                     {(row.bills || []).length > 0 && (
                                         <div className="incidental-upload-list">
                                             {row.bills.map((bill, idx) => (
-                                                <div key={idx} className="incidental-upload-item" style={{ gap: '8px' }}>
+                                                <div key={idx} className="incidental-upload-item">
                                                     <button type="button" className="incidental-upload-preview" onClick={() => previewBill(bill)}>
                                                         <FileText size={14} />
                                                         <span>Bill {idx + 1}</span>
                                                     </button>
-                                                    <input
-                                                        type="text"
-                                                        placeholder="Inv #"
-                                                        className="cat-input invoice-input-mini"
-                                                        style={{ width: '60px', padding: '2px 4px', fontSize: '0.65rem', height: '22px', border: '1px solid #cbd5e1', borderRadius: '4px' }}
-                                                        value={invoiceNumbers[idx] || ''}
-                                                        onChange={e => updateIncidentalInvoiceNumber(row.id, idx, e.target.value)}
-                                                        disabled={isLocked}
-                                                    />
                                                     {!isLocked && (
                                                         <button type="button" className="incidental-upload-remove" onClick={() => removeBill(row.id, idx)}>
                                                             <X size={12} />
@@ -2387,12 +2639,12 @@ const TripExpenseGrid = ({
 
         // Filter ticket statuses by travel mode
         const relevantTicketStatuses = (ticketStatusOptions || []).filter(item => {
-            if (mode === 'Flight') return item.is_flight;
-            if (mode === 'Train') return item.is_train;
-            if (mode === 'Intercity Bus') return item.is_bus;
-            if (mode === 'Intercity Cab') return item.is_intercity_cab;
+            if (mode === 'Flight') return !!item.is_flight;
+            if (mode === 'Train') return !!item.is_train;
+            if (mode === 'Intercity Bus') return !!item.is_bus;
+            if (mode === 'Intercity Cab') return !!item.is_intercity_cab;
             return false;
-        }).map(item => item.status_name);
+        }).map(item => toTitleCase(item.status_name));
         const providerOptions = mode === 'Flight'
             ? flightProviders
             : mode === 'Train'
@@ -2567,7 +2819,7 @@ const TripExpenseGrid = ({
                                                 <label>Quota Type</label>
                                                 <select className="cat-input" value={row.details.quotaType || ''} onChange={e => updateDetails(row.id, 'quotaType', e.target.value)} disabled={isLocked}>
                                                     <option value="">Select Quota</option>
-                                                    {(quotaTypeOptions || []).map(q => <option key={q.id || q.quota_name} value={q.quota_name}>{q.quota_name}</option>)}
+                                                    {(quotaTypeOptions || []).map(q => <option key={q.id || q.quota_name} value={q.quota_name}>{toTitleCase(q.quota_name)}</option>)}
                                                 </select>
                                             </div>
                                         </>
@@ -2609,7 +2861,10 @@ const TripExpenseGrid = ({
                                         <>
                                             <div className="input-with-label-mini">
                                                 <label>Operator Name</label>
-                                                <input type="text" className="cat-input" placeholder="Enter Operator" value={row.details.carrier || ''} onChange={e => updateDetails(row.id, 'carrier', e.target.value)} disabled={isLocked} />
+                                                <select className="cat-input" value={row.details.carrier || ''} onChange={e => updateDetails(row.id, 'carrier', e.target.value)} disabled={isLocked}>
+                                                    <option value="">Select Operator</option>
+                                                    {(busOperators || []).map(option => <option key={option} value={option}>{option}</option>)}
+                                                </select>
                                             </div>
                                             <div className="input-with-label-mini">
                                                 <label>Bus Type *</label>
@@ -2637,7 +2892,7 @@ const TripExpenseGrid = ({
                                                 <label>Cab Type</label>
                                                 <select className="cat-input" value={row.details.vehicleType || ''} onChange={e => updateDetails(row.id, 'vehicleType', e.target.value)} disabled={isLocked}>
                                                     <option value="">Select Type</option>
-                                                    {CAB_VEHICLE_TYPES.map(v => <option key={v} value={v}>{v}</option>)}
+                                                    {(intercityCabVehicleTypes || []).map(v => <option key={v} value={v}>{v}</option>)}
                                                 </select>
                                             </div>
                                             <div className="input-with-label-mini">
@@ -2659,6 +2914,19 @@ const TripExpenseGrid = ({
                                     )}
                                     {!['Train', 'Flight', 'Intercity Bus', 'Intercity Cab'].includes(mode) && (
                                         <div className="text-muted" style={{ fontSize: '0.8rem', fontStyle: 'italic' }}>Please select Travel Mode to see details</div>
+                                    )}
+                                    {['Flight', 'Train'].includes(mode) && (
+                                        <div className="input-with-label-mini mt-2" style={{ flexDirection: 'row', alignItems: 'center', gap: '8px', borderTop: '1px solid #f1f5f9', paddingTop: '8px' }}>
+                                            <input
+                                                type="checkbox"
+                                                id={`meal-inc-${row.id}`}
+                                                style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+                                                checked={row.details.mealIncluded === 'Yes'}
+                                                onChange={e => updateDetails(row.id, 'mealIncluded', e.target.checked ? 'Yes' : 'No')}
+                                                disabled={isLocked}
+                                            />
+                                            <label htmlFor={`meal-inc-${row.id}`} style={{ cursor: 'pointer', fontWeight: '600', color: '#475569', fontSize: '0.75rem' }}>Meal Included in Ticket</label>
+                                        </div>
                                     )}
                                 </div>
                             </div>
@@ -2726,7 +2994,14 @@ const TripExpenseGrid = ({
                                     </div>
                                     <div className="input-with-label-mini" style={{ gridColumn: mode === 'Flight' ? 'span 1' : 'span 2' }}>
                                         <label>Journey Duration</label>
-                                        <input type="text" readOnly className="cat-input" value={row.timeDetails?.boardingTime && row.timeDetails?.actualTime ? "Calculated on View" : "N/A"} disabled />
+                                        <input
+                                            type="text"
+                                            readOnly
+                                            className="cat-input"
+                                            style={{ backgroundColor: '#f8fafc', fontWeight: 'bold', color: '#1e293b' }}
+                                            value={calculateJourneyDuration(row.details.depDate, row.timeDetails?.boardingTime, row.details.arrDate, row.timeDetails?.actualTime)}
+                                            disabled
+                                        />
                                     </div>
                                 </div>
                             </div>
@@ -2779,8 +3054,6 @@ const TripExpenseGrid = ({
                                                     const val = e.target.value.replace(/[^0-9.]/g, '');
                                                     if (val !== '' && !/^\d*\.?\d{0,2}$/.test(val)) return;
                                                     updateDetails(row.id, 'ticketAmount', val);
-                                                    const itemizedSum = (row.details.travelIncidentals || []).reduce((sum, item) => sum + parseFloat(item.amount || 0), 0);
-                                                    updateRow(row.id, 'amount', (parseFloat(val || 0) + itemizedSum).toFixed(2));
                                                 }}
                                                 disabled={isLocked || row.details.bookedBy === 'Company Booked'}
                                             />
@@ -2796,7 +3069,8 @@ const TripExpenseGrid = ({
                                                     <option value="">Select Type</option>
                                                     {travelIncidentalTypes.filter(t => {
                                                         const isDuplicate = (row.details.travelIncidentals || []).some((otherItem, otherIdx) => otherIdx !== idx && otherItem.type === t);
-                                                        return !isDuplicate;
+                                                        const isPorterAllowed = !['Porter Charges', 'Porter'].includes(t) || hasAdditionalLuggage;
+                                                        return !isDuplicate && isPorterAllowed;
                                                     }).map(t => <option key={t} value={t}>{t}</option>)}
                                                 </select>
                                                 <input type="number" className="cat-input" style={{ flex: 1, padding: '5px', fontSize: '12px' }} placeholder="Cost" value={item.amount} onChange={e => updateTravelIncidental(row.id, idx, 'amount', e.target.value)} disabled={isLocked} />
@@ -2856,20 +3130,11 @@ const TripExpenseGrid = ({
                                     {(row.bills || []).length > 0 && (
                                         <div className="incidental-upload-list">
                                             {row.bills.map((bill, idx) => (
-                                                <div key={idx} className="incidental-upload-item" style={{ gap: '8px' }}>
+                                                <div key={idx} className="incidental-upload-item">
                                                     <button type="button" className="incidental-upload-preview" onClick={() => previewBill(bill)}>
                                                         <FileText size={14} />
                                                         <span>File {idx + 1}</span>
                                                     </button>
-                                                    <input
-                                                        type="text"
-                                                        placeholder="Inv #"
-                                                        className="cat-input invoice-input-mini"
-                                                        style={{ width: '60px', padding: '2px 4px', fontSize: '0.65rem', height: '22px', border: '1px solid #cbd5e1', borderRadius: '4px' }}
-                                                        value={travelInvoiceNumbers[idx] || ''}
-                                                        onChange={e => updateTravelInvoiceNumber(row.id, idx, e.target.value)}
-                                                        disabled={isLocked}
-                                                    />
                                                     {!isLocked && (
                                                         <button type="button" className="incidental-upload-remove" onClick={() => removeBill(row.id, idx)}>
                                                             <X size={12} />
@@ -2892,6 +3157,10 @@ const TripExpenseGrid = ({
     const renderLocalTravelCard = (row) => {
         const localInvoiceNumbers = getLocalInvoiceNumbers(row);
         const showOdoFields = ['Own Car', 'Company Car', 'Own Bike', 'Self Drive Rental'].includes(row.details.subType);
+        // Incidental expenses (Toll, Parking, etc.) only apply to personal/company vehicles
+        const showIncidentalSection = ['Own Bike', 'Company Bike', 'Own Car', 'Company Car'].includes(row.details.subType);
+        // For non-personal-vehicle modes (Auto, PT, Cab, etc.) the amount is entered directly
+        const isAmountAutoCalculated = showIncidentalSection;
 
         return (
             <tr key={row.id} className="category-row-block incidental-card-row">
@@ -2932,7 +3201,7 @@ const TripExpenseGrid = ({
                                             {localTravelModes.map(option => <option key={option} value={option}>{option}</option>)}
                                         </select>
                                     </div>
-                                    {row.details.mode === 'Car' && (
+                                    {row.details.mode && row.details.mode.toLowerCase() === 'car' && (
                                         <div className="input-with-label-mini">
                                             <label>Type *</label>
                                             <select className="cat-input" value={row.details.subType || ''} onChange={e => updateDetails(row.id, 'subType', e.target.value)} disabled={isLocked || isFixedLocal}>
@@ -2941,7 +3210,7 @@ const TripExpenseGrid = ({
                                             </select>
                                         </div>
                                     )}
-                                    {row.details.mode === 'Bike' && (
+                                    {row.details.mode && row.details.mode.toLowerCase() === 'bike' && (
                                         <div className="input-with-label-mini">
                                             <label>Type *</label>
                                             <select className="cat-input" value={row.details.subType || ''} onChange={e => updateDetails(row.id, 'subType', e.target.value)} disabled={isLocked || isFixedLocal}>
@@ -2950,23 +3219,41 @@ const TripExpenseGrid = ({
                                             </select>
                                         </div>
                                     )}
-                                    {row.details.mode === 'Public Transport' && (
+                                    {row.details.mode && row.details.mode.toLowerCase() === 'auto' && (
                                         <div className="input-with-label-mini">
                                             <label>Type *</label>
                                             <select className="cat-input" value={row.details.subType || ''} onChange={e => updateDetails(row.id, 'subType', e.target.value)} disabled={isLocked || isFixedLocal}>
                                                 <option value="">Select Type</option>
-                                                {localProviders.map(option => <option key={option} value={option}>{option}</option>)}
+                                                {localAutoSubTypes.map(option => <option key={option} value={option}>{option}</option>)}
                                             </select>
                                         </div>
                                     )}
-                                    {!['Own Bike', 'Company Bike', 'Own Car', 'Company Car'].includes(row.details.subType) && !['Metro Train', 'Bus'].includes(row.details.mode) && (
+
+                                    {row.details.mode && row.details.mode.toLowerCase() === 'public transport' && (
                                         <div className="input-with-label-mini">
-                                            <label>Booking Type</label>
-                                            <select className="cat-input" value={row.details.bookedBy || 'Self Booked'} onChange={e => { if (!isFixedLocal) updateDetails(row.id, 'bookedBy', e.target.value); }} disabled={isLocked || isFixedLocal}>
-                                                {bookedByOptions.map(option => <option key={option} value={option}>{option}</option>)}
+                                            <label>Type *</label>
+                                            <select className="cat-input" value={row.details.subType || ''} onChange={e => updateDetails(row.id, 'subType', e.target.value)} disabled={isLocked || isFixedLocal}>
+                                                <option value="">Select Type</option>
+                                                {localProviders.filter(p => p.is_metro || p.is_bus).map(p => <option key={p.id} value={toTitleCase(p.provider_name)}>{toTitleCase(p.provider_name)}</option>)}
                                             </select>
                                         </div>
                                     )}
+                                    {['Pooling', 'Uber', 'Ola', 'Rental', 'App Based Cab'].map(s => s.toLowerCase()).includes(row.details.subType ? row.details.subType.toLowerCase() : '') && (
+                                        <div className="input-with-label-mini">
+                                            <label>Select Provider</label>
+                                            <select className="cat-input" value={row.details.provider || ''} onChange={e => updateDetails(row.id, 'provider', e.target.value)} disabled={isLocked || isFixedLocal}>
+                                                <option value="">{localProviders.length === 0 ? 'No Providers' : 'Select Provider'}</option>
+                                                {localProviders.filter(p => {
+                                                    const modeLC = row.details.mode ? row.details.mode.toLowerCase() : '';
+                                                    if (modeLC === 'bike') return p.is_bike;
+                                                    if (modeLC === 'car') return p.is_car;
+                                                    if (modeLC === 'auto') return p.is_auto;
+                                                    return true;
+                                                }).map(p => <option key={p.id} value={toTitleCase(p.provider_name)}>{toTitleCase(p.provider_name)}</option>)}
+                                            </select>
+                                        </div>
+                                    )}
+
                                 </div>
                             </div>
 
@@ -3034,46 +3321,57 @@ const TripExpenseGrid = ({
                                         </div>
                                     )}
 
-                                    {/* Itemized List */}
-                                    <div style={{ marginTop: '10px' }}>
-                                        <div style={{ fontSize: '11px', fontWeight: '800', color: '#64748b', textTransform: 'uppercase', marginBottom: '8px', letterSpacing: '0.3px' }}>Incidental Expense</div>
-                                        {(row.details.localIncidentals || []).map((item, idx) => (
-                                            <div key={idx} style={{ display: 'flex', gap: '8px', marginBottom: '8px', alignItems: 'center' }}>
-                                                <select className="cat-input" style={{ flex: 2, padding: '5px', fontSize: '12px' }} value={item.type} onChange={e => updateLocalIncidental(row.id, idx, 'type', e.target.value)} disabled={isLocked}>
-                                                    <option value="">Select Type</option>
-                                                    {localIncidentalTypes.filter(t => {
-                                                        // Exclude if already selected in another row
-                                                        const isDuplicate = (row.details.localIncidentals || []).some((otherItem, otherIdx) => otherIdx !== idx && otherItem.type === t);
-                                                        if (isDuplicate) return false;
+                                    {/* Itemized Incidental List — only for personal/company vehicles */}
+                                    {showIncidentalSection && (
+                                        <div style={{ marginTop: '10px' }}>
+                                            <div style={{ fontSize: '11px', fontWeight: '800', color: '#64748b', textTransform: 'uppercase', marginBottom: '8px', letterSpacing: '0.3px' }}>Incidental Expense</div>
+                                            {(row.details.localIncidentals || []).map((item, idx) => (
+                                                <div key={idx} style={{ display: 'flex', gap: '8px', marginBottom: '8px', alignItems: 'center' }}>
+                                                    <select className="cat-input" style={{ flex: 2, padding: '5px', fontSize: '12px' }} value={item.type} onChange={e => updateLocalIncidental(row.id, idx, 'type', e.target.value)} disabled={isLocked}>
+                                                        <option value="">Select Type</option>
+                                                        {localIncidentalTypes.filter(t => {
+                                                            const isDuplicate = (row.details.localIncidentals || []).some((otherItem, otherIdx) => otherIdx !== idx && otherItem.type === t);
+                                                            if (isDuplicate) return false;
+                                                            if (t === 'Fuel' && parseFloat(row.details.fuelAmount || 0) > 0) return false;
+                                                            if (t === 'Toll Charges' && parseFloat(row.details.tollAmount || 0) > 0) return false;
+                                                            return true;
+                                                        }).map(t => <option key={t} value={t}>{t}</option>)}
+                                                    </select>
+                                                    <input type="number" className="cat-input" style={{ flex: 1, padding: '5px', fontSize: '12px' }} placeholder="Cost" value={item.amount} onChange={e => updateLocalIncidental(row.id, idx, 'amount', e.target.value)} disabled={isLocked} />
+                                                    {!isLocked && (
+                                                        <button onClick={() => deleteLocalIncidental(row.id, idx)} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '4px' }} title="Delete item">
+                                                            <Trash2 size={14} />
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            ))}
+                                            {!isLocked && (
+                                                <button onClick={() => addLocalIncidental(row.id)} style={{ padding: '6px', fontSize: '11px', background: '#f8fafc', border: '1px dashed #cbd5e1', borderRadius: '6px', cursor: 'pointer', width: '100%', color: '#475569', textAlign: 'center' }}>
+                                                    + Add Item (Toll, Parking, etc.)
+                                                </button>
+                                            )}
+                                        </div>
+                                    )}
 
-                                                        // Hide Fuel or Toll if already auto-calculated and displayed at the top
-                                                        if (t === 'Fuel' && parseFloat(row.details.fuelAmount || 0) > 0) return false;
-                                                        if (t === 'Toll Charges' && parseFloat(row.details.tollAmount || 0) > 0) return false;
-
-                                                        return true;
-                                                    }).map(t => <option key={t} value={t}>{t}</option>)}
-                                                </select>
-                                                <input type="number" className="cat-input" style={{ flex: 1, padding: '5px', fontSize: '12px' }} placeholder="Cost" value={item.amount} onChange={e => updateLocalIncidental(row.id, idx, 'amount', e.target.value)} disabled={isLocked} />
-                                                {!isLocked && (
-                                                    <button onClick={() => deleteLocalIncidental(row.id, idx)} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '4px' }} title="Delete item">
-                                                        <Trash2 size={14} />
-                                                    </button>
-                                                )}
-                                            </div>
-                                        ))}
-                                        {!isLocked && (
-                                            <button onClick={() => addLocalIncidental(row.id)} style={{ padding: '6px', fontSize: '11px', background: '#f8fafc', border: '1px dashed #cbd5e1', borderRadius: '6px', cursor: 'pointer', width: '100%', color: '#475569', textAlign: 'center' }}>
-                                                + Add Item (Parking, manual Toll, etc.)
-                                            </button>
-                                        )}
-                                    </div>
-
-                                    {/* Total */}
+                                    {/* Total / Direct Amount entry */}
                                     <div className="input-with-label-mini" style={{ marginTop: '15px', paddingTop: '10px', borderTop: '1px solid #e2e8f0' }}>
-                                        <label style={{ fontWeight: '700', color: '#334155' }}>Total Amount</label>
-                                        <div className="amount-with-currency" style={{ background: '#f1f5f9' }}>
-                                            <span className="currency-symbol" style={{ background: '#e2e8f0' }}>₹</span>
-                                            <input type="text" className="cat-input" style={{ fontWeight: 'bold', color: '#0f172a' }} value={row.amount || '0.00'} disabled />
+                                        <label style={{ fontWeight: '700', color: '#334155' }}>
+                                            {isAmountAutoCalculated ? 'Total Amount' : 'Amount *'}
+                                        </label>
+                                        <div className="amount-with-currency" style={{ background: isAmountAutoCalculated ? '#f1f5f9' : 'white' }}>
+                                            <span className="currency-symbol" style={{ background: isAmountAutoCalculated ? '#e2e8f0' : '#f1f5f9' }}>₹</span>
+                                            <input
+                                                type="text"
+                                                className="cat-input"
+                                                style={{ fontWeight: 'bold', color: '#0f172a' }}
+                                                placeholder={isAmountAutoCalculated ? '0.00' : 'Enter amount'}
+                                                value={row.amount || ''}
+                                                disabled={isLocked || isAmountAutoCalculated}
+                                                onChange={isAmountAutoCalculated ? undefined : e => {
+                                                    const val = e.target.value.replace(/[^0-9.]/g, '');
+                                                    updateRow(row.id, 'amount', val);
+                                                }}
+                                            />
                                         </div>
                                     </div>
                                 </div>
@@ -3196,20 +3494,11 @@ const TripExpenseGrid = ({
                                     {(row.bills || []).length > 0 && (
                                         <div className="incidental-upload-list">
                                             {row.bills.map((bill, idx) => (
-                                                <div key={idx} className="incidental-upload-item" style={{ gap: '8px' }}>
+                                                <div key={idx} className="incidental-upload-item">
                                                     <button type="button" className="incidental-upload-preview" onClick={() => previewBill(bill)}>
                                                         <FileText size={14} />
                                                         <span>Bill {idx + 1}</span>
                                                     </button>
-                                                    <input
-                                                        type="text"
-                                                        placeholder="Inv #"
-                                                        className="cat-input invoice-input-mini"
-                                                        style={{ width: '60px', padding: '2px 4px', fontSize: '0.65rem', height: '22px', border: '1px solid #cbd5e1', borderRadius: '4px' }}
-                                                        value={localInvoiceNumbers[idx] || ''}
-                                                        onChange={e => updateLocalInvoiceNumber(row.id, idx, e.target.value)}
-                                                        disabled={isLocked}
-                                                    />
                                                     {!isLocked && (
                                                         <button type="button" className="incidental-upload-remove" onClick={() => removeBill(row.id, idx)}>
                                                             <X size={12} />
@@ -3238,6 +3527,15 @@ const TripExpenseGrid = ({
         const showHotelName = isSelfMeal && (mealSource === 'hotel' || mealSource === 'online');
         const showRestaurantName = isSelfMeal && mealSource === 'restaurant';
         const amountDisabled = isLocked || !isSelfMeal;
+
+        // Check if meal already included in travel booking for this date
+        const mealDateStr = row.date;
+        const isMealIncludedInTravel = rows.some(r2 =>
+            r2.nature === 'Travel' &&
+            r2.details.meal_included_flag &&
+            r2.details.depDate <= mealDateStr &&
+            r2.details.arrDate >= mealDateStr
+        );
 
         return (
             <tr key={row.id} className="category-row-block incidental-card-row">
@@ -3286,8 +3584,21 @@ const TripExpenseGrid = ({
                                         <label>Meal Type *</label>
                                         <select className="cat-input" value={row.details.mealType || ''} onChange={e => updateDetails(row.id, 'mealType', e.target.value)} disabled={isLocked}>
                                             <option value="">Select Meal Type</option>
-                                            {mealTypes.map(option => <option key={option} value={option}>{option}</option>)}
+                                            {mealTypes.map(option => {
+                                                const isStandardMeal = ['Breakfast', 'Lunch', 'Dinner'].includes(option);
+                                                const isDisabled = isMealIncludedInTravel && isStandardMeal;
+                                                return (
+                                                    <option key={option} value={option} disabled={isDisabled}>
+                                                        {option} {isDisabled ? '(Included in Travel)' : ''}
+                                                    </option>
+                                                );
+                                            })}
                                         </select>
+                                        {isMealIncludedInTravel && (
+                                            <div style={{ fontSize: '0.65rem', color: '#f59e0b', marginTop: '4px', fontWeight: '500' }}>
+                                                Note: Standard meals are covered by your travel booking for this date.
+                                            </div>
+                                        )}
                                     </div>
                                     {row.details.mealType && (
                                         <div className="input-with-label-mini">
@@ -3403,20 +3714,11 @@ const TripExpenseGrid = ({
                                     {(row.bills || []).length > 0 && (
                                         <div className="incidental-upload-list">
                                             {row.bills.map((bill, idx) => (
-                                                <div key={idx} className="incidental-upload-item" style={{ gap: '8px' }}>
+                                                <div key={idx} className="incidental-upload-item">
                                                     <button type="button" className="incidental-upload-preview" onClick={() => previewBill(bill)}>
                                                         <FileText size={14} />
                                                         <span>Bill {idx + 1}</span>
                                                     </button>
-                                                    <input
-                                                        type="text"
-                                                        placeholder="Inv #"
-                                                        className="cat-input invoice-input-mini"
-                                                        style={{ width: '60px', padding: '2px 4px', fontSize: '0.65rem', height: '22px', border: '1px solid #cbd5e1', borderRadius: '4px' }}
-                                                        value={foodInvoiceNumbers[idx] || ''}
-                                                        onChange={e => updateFoodInvoiceNumber(row.id, idx, e.target.value)}
-                                                        disabled={isLocked}
-                                                    />
                                                     {!isLocked && (
                                                         <button type="button" className="incidental-upload-remove" onClick={() => removeBill(row.id, idx)}>
                                                             <X size={12} />
@@ -3567,6 +3869,15 @@ const TripExpenseGrid = ({
                                                 {stayBookingTypes.map(o => <option key={o} value={o}>{o}</option>)}
                                             </select>
                                         </div>
+                                        {row.details.bookingType !== 'Walkin' && (
+                                            <div className="input-with-label-mini mt-1">
+                                                <label>Booking Source *</label>
+                                                <select className="cat-input" value={row.details.bookingSource || ''} onChange={e => updateDetails(row.id, 'bookingSource', e.target.value)} disabled={isLocked}>
+                                                    <option value="">Select Booking Source</option>
+                                                    {stayBookingSources.map(o => <option key={o} value={o}>{o}</option>)}
+                                                </select>
+                                            </div>
+                                        )}
                                         {row.details.bookingType === 'Online Booking' && (
                                             <div className="input-with-label-mini">
                                                 <label>Booking ID *</label>
@@ -3581,20 +3892,80 @@ const TripExpenseGrid = ({
                                     <div className="details-box-head"><span style={{ fontSize: '0.7rem', fontWeight: 700, color: '#334155', textTransform: 'uppercase' }}>Expense & Upload</span></div>
                                     <div className="details-box-body" style={{ padding: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
                                         <div className="input-with-label-mini">
-                                            <label>Amount *</label>
+                                            <label>Base Amount *</label>
                                             <div className="amount-with-currency">
                                                 <span className="currency-symbol">₹</span>
-                                                <input type="text" className="cat-input" placeholder="0.00" value={row.amount || ''} onChange={e => updateRow(row.id, 'amount', e.target.value)} disabled={isLocked || row.details.bookingType === 'Company Booking'} />
+                                                <input
+                                                    type="text"
+                                                    className="cat-input"
+                                                    placeholder="0.00"
+                                                    value={row.details.baseAmount ?? row.amount ?? ''}
+                                                    disabled={isLocked || row.details.bookingType === 'Company Booking'}
+                                                    onChange={e => {
+                                                        const val = e.target.value.replace(/[^0-9.]/g, '');
+                                                        const base = parseFloat(val) || 0;
+                                                        const early = parseFloat(row.details.earlyCheckInCharges) || 0;
+                                                        const late = parseFloat(row.details.lateCheckOutCharges) || 0;
+                                                        setRows(prev => prev.map(r => r.id === row.id ? {
+                                                            ...r,
+                                                            amount: String((base + early + late).toFixed(2)),
+                                                            details: { ...r.details, baseAmount: val },
+                                                            isSaved: false
+                                                        } : r));
+                                                    }}
+                                                />
                                             </div>
                                         </div>
                                         <div style={{ display: 'flex', gap: '8px' }}>
                                             <div className="input-with-label-mini" style={{ flex: 1 }}>
                                                 <label style={{ fontSize: '0.6rem' }}>Early Chgs</label>
-                                                <input type="number" className="cat-input" placeholder="0.00" value={row.details.earlyCheckInCharges || ''} onChange={e => updateDetails(row.id, 'earlyCheckInCharges', e.target.value)} disabled={isLocked} />
+                                                <input
+                                                    type="number"
+                                                    className="cat-input"
+                                                    placeholder="0.00"
+                                                    value={row.details.earlyCheckInCharges || ''}
+                                                    disabled={isLocked}
+                                                    onChange={e => {
+                                                        const early = parseFloat(e.target.value) || 0;
+                                                        const base = parseFloat(row.details.baseAmount ?? row.amount) || 0;
+                                                        const late = parseFloat(row.details.lateCheckOutCharges) || 0;
+                                                        setRows(prev => prev.map(r => r.id === row.id ? {
+                                                            ...r,
+                                                            amount: String((base + early + late).toFixed(2)),
+                                                            details: { ...r.details, earlyCheckInCharges: e.target.value },
+                                                            isSaved: false
+                                                        } : r));
+                                                    }}
+                                                />
                                             </div>
                                             <div className="input-with-label-mini" style={{ flex: 1 }}>
                                                 <label style={{ fontSize: '0.6rem' }}>Late Chgs</label>
-                                                <input type="number" className="cat-input" placeholder="0.00" value={row.details.lateCheckOutCharges || ''} onChange={e => updateDetails(row.id, 'lateCheckOutCharges', e.target.value)} disabled={isLocked} />
+                                                <input
+                                                    type="number"
+                                                    className="cat-input"
+                                                    placeholder="0.00"
+                                                    value={row.details.lateCheckOutCharges || ''}
+                                                    disabled={isLocked}
+                                                    onChange={e => {
+                                                        const late = parseFloat(e.target.value) || 0;
+                                                        const base = parseFloat(row.details.baseAmount ?? row.amount) || 0;
+                                                        const early = parseFloat(row.details.earlyCheckInCharges) || 0;
+                                                        setRows(prev => prev.map(r => r.id === row.id ? {
+                                                            ...r,
+                                                            amount: String((base + early + late).toFixed(2)),
+                                                            details: { ...r.details, lateCheckOutCharges: e.target.value },
+                                                            isSaved: false
+                                                        } : r));
+                                                    }}
+                                                />
+                                            </div>
+                                        </div>
+                                        {/* Auto-calculated total */}
+                                        <div className="input-with-label-mini" style={{ paddingTop: '6px', borderTop: '1px dashed #e2e8f0' }}>
+                                            <label style={{ fontWeight: 700, color: '#334155' }}>Total Amount</label>
+                                            <div className="amount-with-currency" style={{ background: '#f1f5f9' }}>
+                                                <span className="currency-symbol" style={{ background: '#e2e8f0' }}>₹</span>
+                                                <input type="text" className="cat-input" style={{ fontWeight: 'bold', color: '#0f172a' }} value={row.amount || '0.00'} disabled />
                                             </div>
                                         </div>
 
@@ -3616,20 +3987,11 @@ const TripExpenseGrid = ({
                             {(row.bills || []).length > 0 && (
                                 <div className="incidental-upload-list">
                                     {row.bills.map((bill, idx) => (
-                                        <div key={idx} className="incidental-upload-item" style={{ gap: '8px' }}>
+                                        <div key={idx} className="incidental-upload-item">
                                             <button type="button" className="incidental-upload-preview" onClick={() => previewBill(bill)}>
                                                 <FileText size={14} />
                                                 <span>Bill {idx + 1}</span>
                                             </button>
-                                            <input
-                                                type="text"
-                                                placeholder="Inv #"
-                                                className="cat-input invoice-input-mini"
-                                                style={{ width: '60px', padding: '2px 4px', fontSize: '0.65rem', height: '22px', border: '1px solid #cbd5e1', borderRadius: '4px' }}
-                                                value={accommodationInvoiceNumbers[idx] || ''}
-                                                onChange={e => updateAccommodationInvoiceNumber(row.id, idx, e.target.value)}
-                                                disabled={isLocked}
-                                            />
                                             {!isLocked && (
                                                 <button type="button" className="incidental-upload-remove" onClick={() => removeBill(row.id, idx)}>
                                                     <X size={12} />
@@ -4065,30 +4427,17 @@ const TripExpenseGrid = ({
                                                                                 </>
                                                                             )}
                                                                             {(row.bills || []).length > 0 && (
-                                                                                <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
-                                                                                    {row.bills.map((b, i) => {
-                                                                                        const localInvoiceNumbers = getLocalInvoiceNumbers(row);
-                                                                                        return (
-                                                                                            <div key={i} style={{ position: 'relative', display: 'inline-flex', background: '#e0f2fe', borderRadius: '6px', padding: '4px 8px', alignItems: 'center', gap: '6px', color: '#0369a1', fontWeight: 600 }}>
-                                                                                                <div style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.7rem' }} onClick={() => previewBill(b)}>
-                                                                                                    <FileText size={12} /> Bill {i + 1}
-                                                                                                </div>
-                                                                                                <input
-                                                                                                    type="text"
-                                                                                                    placeholder="Inv #"
-                                                                                                    style={{ width: '50px', border: '1px solid #bae6fd', borderRadius: '4px', padding: '0 4px', fontSize: '0.6rem', height: '18px', background: 'white', outline: 'none' }}
-                                                                                                    value={localInvoiceNumbers[i] || ''}
-                                                                                                    onChange={e => updateLocalInvoiceNumber(row.id, i, e.target.value)}
-                                                                                                    disabled={isLocked}
-                                                                                                />
-                                                                                                {!isLocked && (
-                                                                                                    <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', padding: 0, lineHeight: 1, marginLeft: '2px' }} onClick={e => { e.stopPropagation(); removeBill(row.id, i); }}>
-                                                                                                        <X size={10} />
-                                                                                                    </button>
-                                                                                                )}
-                                                                                            </div>
-                                                                                        );
-                                                                                    })}
+                                                                                <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                                                                                    {row.bills.map((b, i) => (
+                                                                                        <div key={i} style={{ position: 'relative', display: 'inline-flex', cursor: 'pointer', background: '#e0f2fe', borderRadius: '6px', padding: '4px 8px', alignItems: 'center', gap: '4px', fontSize: '0.7rem', color: '#0369a1', fontWeight: 600 }} onClick={() => previewBill(b)}>
+                                                                                            <FileText size={12} /> Bill {i + 1}
+                                                                                            {!isLocked && (
+                                                                                                <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', padding: 0, lineHeight: 1, marginLeft: '2px' }} onClick={e => { e.stopPropagation(); removeBill(row.id, i); }}>
+                                                                                                    <X size={10} />
+                                                                                                </button>
+                                                                                            )}
+                                                                                        </div>
+                                                                                    ))}
                                                                                 </div>
                                                                             )}
                                                                         </div>
@@ -4370,7 +4719,7 @@ const TripExpenseGrid = ({
                                                                         {localTravelModes.map(m => <option key={m} value={m}>{m}</option>)}
                                                                     </select>
 
-                                                                    {row.details.mode === 'Car' && (
+                                                                    {row.details.mode && row.details.mode.toLowerCase() === 'car' && (
                                                                         <select className="cat-input mt-1" value={row.details.subType || ''} onChange={e => { if (!isFixedLocal) updateDetails(row.id, 'subType', e.target.value); }} disabled={isFixedLocal}>
                                                                             <option value="">Select Sub-Type</option>
                                                                             {localCarSubTypes.map(s => <option key={s} value={s}>{s}</option>)}
@@ -4378,20 +4727,38 @@ const TripExpenseGrid = ({
                                                                     )}
 
 
-                                                                    {row.details.mode === 'Bike' && (
+                                                                    {row.details.mode && row.details.mode.toLowerCase() === 'bike' && (
                                                                         <select className="cat-input mt-1" value={row.details.subType || ''} onChange={e => { if (!isFixedLocal) updateDetails(row.id, 'subType', e.target.value); }} disabled={isFixedLocal}>
                                                                             <option value="">Select Sub-Type</option>
                                                                             {localBikeSubTypes.map(s => <option key={s} value={s}>{s}</option>)}
                                                                         </select>
                                                                     )}
-
-                                                                    {row.details.mode === 'Public Transport' && (
+                                                                    {row.details.mode && row.details.mode.toLowerCase() === 'auto' && (
                                                                         <select className="cat-input mt-1" value={row.details.subType || ''} onChange={e => { if (!isFixedLocal) updateDetails(row.id, 'subType', e.target.value); }} disabled={isFixedLocal}>
                                                                             <option value="">Select Sub-Type</option>
-                                                                            {localProviders.map(s => <option key={s} value={s}>{s}</option>)}
+                                                                            {localAutoSubTypes.map(s => <option key={s} value={s}>{s}</option>)}
                                                                         </select>
                                                                     )}
-                                                                    {!['Own Bike', 'Company Bike', 'Own Car', 'Company Car'].includes(row.details.subType) && !['Metro Train', 'Bus'].includes(row.details.mode) && (
+
+                                                                    {row.details.mode && row.details.mode.toLowerCase() === 'public transport' && (
+                                                                        <select className="cat-input mt-1" value={row.details.subType || ''} onChange={e => { if (!isFixedLocal) updateDetails(row.id, 'subType', e.target.value); }} disabled={isFixedLocal}>
+                                                                            <option value="">Select Sub-Type</option>
+                                                                            {localProviders.filter(p => p.is_metro || p.is_bus).map(p => <option key={p.id} value={toTitleCase(p.provider_name)}>{toTitleCase(p.provider_name)}</option>)}
+                                                                        </select>
+                                                                    )}
+                                                                    {['Pooling', 'Uber', 'Ola', 'Rental', 'App Based Cab'].map(s => s.toLowerCase()).includes(row.details.subType ? row.details.subType.toLowerCase() : '') && (
+                                                                        <select className="cat-input mt-1" value={row.details.provider || ''} onChange={e => { if (!isFixedLocal) updateDetails(row.id, 'provider', e.target.value); }} disabled={isFixedLocal}>
+                                                                            <option value="">Select Provider</option>
+                                                                            {localProviders.filter(p => {
+                                                                                const modeLC = row.details.mode ? row.details.mode.toLowerCase() : '';
+                                                                                if (modeLC === 'bike') return p.is_bike;
+                                                                                if (modeLC === 'car') return p.is_car;
+                                                                                if (modeLC === 'auto') return p.is_auto;
+                                                                                return true;
+                                                                            }).map(p => <option key={p.id} value={toTitleCase(p.provider_name)}>{toTitleCase(p.provider_name)}</option>)}
+                                                                        </select>
+                                                                    )}
+                                                                    {!['Own Bike', 'Company Bike', 'Own Car', 'Company Car'].map(s => s.toLowerCase()).includes(row.details.subType ? row.details.subType.toLowerCase() : '') && !['Metro Train', 'Bus', 'Walk'].map(m => m.toLowerCase()).includes(row.details.mode ? row.details.mode.toLowerCase() : '') && (
                                                                         <select className="cat-input mt-1" value={row.details.bookedBy || 'Self Booked'} onChange={e => { if (!isFixedLocal) updateDetails(row.id, 'bookedBy', e.target.value); }} disabled={isFixedLocal}>
                                                                             {bookedByOptions.map(b => <option key={b} value={b}>{b}</option>)}
                                                                         </select>
@@ -4565,7 +4932,7 @@ const TripExpenseGrid = ({
                                                                         <label>EXPENSE TYPE</label>
                                                                         <select className="cat-input" value={row.details.incidentalType || ''} onChange={e => updateDetails(row.id, 'incidentalType', e.target.value)}>
                                                                             <option value="">Select Type</option>
-                                                                            {incidentalTypes.filter(t => t !== 'Porter Charges' || hasAdditionalLuggage).map(t => (
+                                                                            {incidentalTypes.filter(t => !['Porter Charges', 'Porter'].includes(t) || hasAdditionalLuggage).map(t => (
                                                                                 <option key={t} value={t}>{t}</option>
                                                                             ))}
                                                                         </select>
@@ -4662,7 +5029,7 @@ const TripExpenseGrid = ({
                                                                                     )}
                                                                                 </div>
                                                                             )}
-                                                                            {row.details.vehicleType === 'Ride Hailing' && (
+                                                                            {row.details.vehicleType && row.details.vehicleType.toLowerCase() === 'ride hailing' && (
                                                                                 <div className="field-group mt-1 px-1">
                                                                                     <label className="checkbox-item mini">
                                                                                         <input type="checkbox" checked={row.details.includeToll || false} onChange={e => updateDetails(row.id, 'includeToll', e.target.checked)} />
@@ -4709,13 +5076,13 @@ const TripExpenseGrid = ({
                                                                                         )}
                                                                                     </div>
                                                                                 )}
-                                                                                {row.details.mode === 'Public Transport' && (
+                                                                                {row.details.mode && row.details.mode.toLowerCase() === 'public transport' && (
                                                                                     <div className="input-with-label-mini mt-1">
                                                                                         <label>Topup?</label>
                                                                                         <input type="number" value={row.details.smartCardRecharge || ''} onChange={e => updateDetails(row.id, 'smartCardRecharge', e.target.value)} />
                                                                                     </div>
                                                                                 )}
-                                                                                {row.details.subType === 'Ride Hailing' && (
+                                                                                {row.details.subType && row.details.subType.toLowerCase() === 'ride hailing' && (
                                                                                     <div className="field-group mt-1 px-1">
                                                                                         <label className="checkbox-item mini">
                                                                                             <input type="checkbox" checked={row.details.includeToll || false} onChange={e => updateDetails(row.id, 'includeToll', e.target.checked)} />
@@ -5299,7 +5666,7 @@ const TripExpenseGrid = ({
                     border: 1px solid #e2e8f0;
                     border-radius: 12px;
                     padding: 20px;
-                    margin-bottom: 12px !important;
+                    margin-bottom: 24px;
                     box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03) !important;
                 }
 
@@ -5337,8 +5704,8 @@ const TripExpenseGrid = ({
                     border-radius: 8px !important;
                     display: flex !important;
                     flex-direction: column !important;
-                    /* height: 100% !important; */
-                    overflow: hidden !important;
+                    height: 100% !important;
+                    overflow: visible !important; /* Changed from hidden to allow dropdowns to pop out of card */
                 }
 
                 /* The header bar for each group (e.g., "LOCATION") */
@@ -5349,6 +5716,8 @@ const TripExpenseGrid = ({
                     padding: 8px 12px !important;
                     background: #f1f5f9 !important; /* Darker grey for the header */
                     border-bottom: 1px solid #e2e8f0 !important;
+                    border-top-left-radius: 8px !important; /* Explicitly set because overflow is now visible */
+                    border-top-right-radius: 8px !important;
                 }
 
                 .incidental-card-head span {
@@ -5415,7 +5784,7 @@ const TripExpenseGrid = ({
                     display: grid !important;
                     grid-template-columns: repeat(5, 1fr) !important; 
                     gap: 12px !important;
-                    align-items: start !important;
+                    align-items: stretch !important;
                 }
 
                 .incidental-textarea {
@@ -5433,14 +5802,14 @@ const TripExpenseGrid = ({
                     grid-template-columns: repeat(5, 1fr) !important; 
                     gap: 12px !important;
                     width: 100% !important;
-                    align-items: start !important;
+                    align-items: stretch !important;
                 }
 
                 .trip-local-card-grid {
                     display: grid !important;
                     grid-template-columns: repeat(3, 1fr) !important;
                     gap: 20px !important;
-                    align-items: start !important;
+                    align-items: stretch !important;
                 }
                 .trip-local-card-grid > :nth-child(1) { grid-column: 1 !important; grid-row: 1 !important; } /* Mode & Booking */
                 .trip-local-card-grid > :nth-child(2) { grid-column: 2 !important; grid-row: 1 !important; } /* Location */
@@ -5555,7 +5924,7 @@ const TripExpenseGrid = ({
                     border-radius: 8px !important;
                     display: flex !important;
                     flex-direction: column !important;
-                    overflow: hidden !important;
+                    overflow: visible !important;
                 }
 
                 .details-box-head {
@@ -5565,6 +5934,8 @@ const TripExpenseGrid = ({
                     padding: 8px 12px !important;
                     background: #f8fafc !important;
                     border-bottom: 1px solid #e2e8f0 !important;
+                    border-top-left-radius: 8px !important;
+                    border-top-right-radius: 8px !important;
                 }
                .accommodation-nights-chip {
                     display: flex !important;

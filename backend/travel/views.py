@@ -1,27 +1,25 @@
 from rest_framework import generics, viewsets, status, serializers # type: ignore
 from django.core.exceptions import PermissionDenied # type: ignore
 from rest_framework.response import Response # type: ignore
-from rest_framework.decorators import action # type: ignore
+from rest_framework.decorators import action, permission_classes as permission_classes_decorator # type: ignore
 from .models import ( # type: ignore
     Trip, Expense, TravelClaim, TravelAdvance, TripOdometer, Dispute, PolicyDocument, BulkActivityBatch, JobReport,
-    TravelModeMaster, BookingTypeMaster, AirlineMaster, FlightClassMaster, TrainClassMaster,
-    BusOperatorMaster, BusTypeMaster, IntercityCabVehicleMaster, TravelProviderMaster,
-    TrainProviderMaster, BusProviderMaster, IntercityCabProviderMaster,
-    LocalTravelModeMaster, LocalCarSubTypeMaster, LocalBikeSubTypeMaster, LocalProviderMaster,
-    StayTypeMaster, RoomTypeMaster, MealCategoryMaster, MealTypeMaster, IncidentalTypeMaster,
-    CustomMasterDefinition, CustomMasterValue, MasterModule, TripTracking
+    TravelModeMaster, BookingTypeMaster, OperatorMaster, TravelClassMaster, VehicleMaster, ProviderMaster,
+    TicketStatusMaster, QuotaTypeMaster,
+    LocalTravelModeMaster, LocalProviderMaster, LocalSubTypeMaster,
+    StayTypeMaster, RoomTypeMaster, StayBookingTypeMaster, StayBookingSourceMaster,
+    MealCategoryMaster, MealTypeMaster, MealSourceMaster, MealProviderMaster,
+    IncidentalTypeMaster, CustomMasterDefinition, CustomMasterValue, MasterModule, TripTracking
 )
 from .serializers import ( # type: ignore
     TripSerializer, ExpenseSerializer, TravelClaimSerializer, TravelAdvanceSerializer,
     TripOdometerSerializer, DisputeSerializer, PolicyDocumentSerializer, PolicyDocumentDetailSerializer, BulkActivityBatchSerializer, JobReportSerializer,
-    TravelModeMasterSerializer, BookingTypeMasterSerializer, AirlineMasterSerializer,
-    FlightClassMasterSerializer, TrainClassMasterSerializer, BusOperatorMasterSerializer,
-    BusTypeMasterSerializer, IntercityCabVehicleMasterSerializer, TravelProviderMasterSerializer,
-    TrainProviderMasterSerializer, BusProviderMasterSerializer, IntercityCabProviderMasterSerializer,
-    LocalTravelModeMasterSerializer, LocalCarSubTypeMasterSerializer, LocalBikeSubTypeMasterSerializer,
-    LocalProviderMasterSerializer, StayTypeMasterSerializer, RoomTypeMasterSerializer,
-    MealCategoryMasterSerializer, MealTypeMasterSerializer, IncidentalTypeMasterSerializer,
-    CustomMasterDefinitionSerializer, CustomMasterValueSerializer, MasterModuleSerializer,
+    TravelModeMasterSerializer, BookingTypeMasterSerializer, OperatorMasterSerializer, TravelClassMasterSerializer,
+    VehicleMasterSerializer, ProviderMasterSerializer, TicketStatusMasterSerializer, QuotaTypeMasterSerializer,
+    LocalTravelModeMasterSerializer, LocalProviderMasterSerializer, LocalSubTypeMasterSerializer,
+    StayTypeMasterSerializer, RoomTypeMasterSerializer, StayBookingTypeMasterSerializer, StayBookingSourceMasterSerializer,
+    MealCategoryMasterSerializer, MealTypeMasterSerializer, MealSourceMasterSerializer, MealProviderMasterSerializer,
+    IncidentalTypeMasterSerializer, CustomMasterDefinitionSerializer, CustomMasterValueSerializer, MasterModuleSerializer,
     TripTrackingSerializer
 )
 import io # type: ignore
@@ -2615,67 +2613,152 @@ class BulkActivityBatchViewSet(viewsets.ModelViewSet):
         )
         return Response({"message": "Batch rejected"})
 
+        return Response({"message": "Batch rejected"})
+
+from django.db import models
+from rest_framework.decorators import action
+
 # --- MASTER VIEWSETS ---
 
-class TravelModeMasterViewSet(viewsets.ModelViewSet):
+class MasterActionMixin:
+    """Mixin to provide restore and include_deleted functionality to Master ViewSets."""
+    def get_queryset(self):
+        include_deleted = self.request.query_params.get('include_deleted') == 'true'
+        if include_deleted:
+            return self.queryset.model.all_objects.all().order_by('id')
+        return self.queryset.order_by('id')
+
+    def perform_create(self, serializer):
+        # Master unique name check: if deleted record exists, restore it instead
+        model = self.queryset.model
+        unique_field = None
+        
+        # Identify the unique character field (usually mode_name, class_name, etc.)
+        for field in model._meta.fields:
+            if isinstance(field, (models.CharField, models.TextField)) and field.unique:
+                unique_field = field.name
+                break
+        
+        if unique_field:
+            val = serializer.validated_data.get(unique_field)
+            if val:
+                existing = model.all_objects.filter(**{unique_field: val}, is_deleted=True).first()
+                if existing:
+                    existing.is_deleted = False
+                    existing.deleted_at = None
+                    # Update other fields to the new values provided
+                    for k, v in serializer.validated_data.items():
+                        setattr(existing, k, v)
+                    existing.save()
+                    # Return the restored object
+                    serializer.instance = existing
+                    return
+        
+        serializer.save()
+
+    @action(detail=True, methods=['post'])
+    def restore(self, request, pk=None):
+        instance = self.queryset.model.all_objects.get(pk=pk)
+        instance.is_deleted = False
+        instance.deleted_at = None
+        instance.deleted_by = None
+        instance.save()
+        return Response({"status": "restored"})
+
+class TravelModeMasterViewSet(MasterActionMixin, viewsets.ModelViewSet):
     permission_classes = [IsCustomAuthenticated]
     queryset = TravelModeMaster.objects.all()
     serializer_class = TravelModeMasterSerializer
 
-class BookingTypeMasterViewSet(viewsets.ModelViewSet):
+class BookingTypeMasterViewSet(MasterActionMixin, viewsets.ModelViewSet):
     permission_classes = [IsCustomAuthenticated]
     queryset = BookingTypeMaster.objects.all()
     serializer_class = BookingTypeMasterSerializer
 
-class AirlineMasterViewSet(viewsets.ModelViewSet):
+class OperatorMasterViewSet(MasterActionMixin, viewsets.ModelViewSet):
     permission_classes = [IsCustomAuthenticated]
-    queryset = AirlineMaster.objects.all()
-    serializer_class = AirlineMasterSerializer
+    queryset = OperatorMaster.objects.all()
+    serializer_class = OperatorMasterSerializer
 
-class FlightClassMasterViewSet(viewsets.ModelViewSet):
+class TravelClassMasterViewSet(MasterActionMixin, viewsets.ModelViewSet):
     permission_classes = [IsCustomAuthenticated]
-    queryset = FlightClassMaster.objects.all()
-    serializer_class = FlightClassMasterSerializer
+    queryset = TravelClassMaster.objects.all()
+    serializer_class = TravelClassMasterSerializer
 
-class TrainClassMasterViewSet(viewsets.ModelViewSet):
+class VehicleMasterViewSet(MasterActionMixin, viewsets.ModelViewSet):
     permission_classes = [IsCustomAuthenticated]
-    queryset = TrainClassMaster.objects.all()
-    serializer_class = TrainClassMasterSerializer
+    queryset = VehicleMaster.objects.all()
+    serializer_class = VehicleMasterSerializer
 
-class BusOperatorMasterViewSet(viewsets.ModelViewSet):
+class ProviderMasterViewSet(MasterActionMixin, viewsets.ModelViewSet):
     permission_classes = [IsCustomAuthenticated]
-    queryset = BusOperatorMaster.objects.all()
-    serializer_class = BusOperatorMasterSerializer
+    queryset = ProviderMaster.objects.all()
+    serializer_class = ProviderMasterSerializer
 
-class BusTypeMasterViewSet(viewsets.ModelViewSet):
+class TicketStatusMasterViewSet(MasterActionMixin, viewsets.ModelViewSet):
     permission_classes = [IsCustomAuthenticated]
-    queryset = BusTypeMaster.objects.all()
-    serializer_class = BusTypeMasterSerializer
+    queryset = TicketStatusMaster.objects.all()
+    serializer_class = TicketStatusMasterSerializer
 
-class IntercityCabVehicleMasterViewSet(viewsets.ModelViewSet):
+class QuotaTypeMasterViewSet(MasterActionMixin, viewsets.ModelViewSet):
     permission_classes = [IsCustomAuthenticated]
-    queryset = IntercityCabVehicleMaster.objects.all()
-    serializer_class = IntercityCabVehicleMasterSerializer
+    queryset = QuotaTypeMaster.objects.all()
+    serializer_class = QuotaTypeMasterSerializer
 
-class TravelProviderMasterViewSet(viewsets.ModelViewSet):
+class LocalTravelModeMasterViewSet(MasterActionMixin, viewsets.ModelViewSet):
     permission_classes = [IsCustomAuthenticated]
-    queryset = TravelProviderMaster.objects.all()
-    serializer_class = TravelProviderMasterSerializer
+    queryset = LocalTravelModeMaster.objects.all()
+    serializer_class = LocalTravelModeMasterSerializer
 
-class TrainProviderMasterViewSet(viewsets.ModelViewSet):
+class LocalProviderMasterViewSet(MasterActionMixin, viewsets.ModelViewSet):
     permission_classes = [IsCustomAuthenticated]
-    queryset = TrainProviderMaster.objects.all()
-    serializer_class = TrainProviderMasterSerializer
+    queryset = LocalProviderMaster.objects.all()
+    serializer_class = LocalProviderMasterSerializer
 
-class BusProviderMasterViewSet(viewsets.ModelViewSet):
+class LocalSubTypeMasterViewSet(MasterActionMixin, viewsets.ModelViewSet):
     permission_classes = [IsCustomAuthenticated]
-    queryset = BusProviderMaster.objects.all()
-    serializer_class = BusProviderMasterSerializer
+    queryset = LocalSubTypeMaster.objects.all()
+    serializer_class = LocalSubTypeMasterSerializer
 
-class IntercityCabProviderMasterViewSet(viewsets.ModelViewSet):
+class StayTypeMasterViewSet(MasterActionMixin, viewsets.ModelViewSet):
     permission_classes = [IsCustomAuthenticated]
-    queryset = IntercityCabProviderMaster.objects.all()
-    serializer_class = IntercityCabProviderMasterSerializer
+    queryset = StayTypeMaster.objects.all()
+    serializer_class = StayTypeMasterSerializer
+
+class RoomTypeMasterViewSet(MasterActionMixin, viewsets.ModelViewSet):
+    permission_classes = [IsCustomAuthenticated]
+    queryset = RoomTypeMaster.objects.all()
+    serializer_class = RoomTypeMasterSerializer
+
+class StayBookingTypeMasterViewSet(MasterActionMixin, viewsets.ModelViewSet):
+    permission_classes = [IsCustomAuthenticated]
+    queryset = StayBookingTypeMaster.objects.all()
+    serializer_class = StayBookingTypeMasterSerializer
+
+class StayBookingSourceMasterViewSet(MasterActionMixin, viewsets.ModelViewSet):
+    permission_classes = [IsCustomAuthenticated]
+    queryset = StayBookingSourceMaster.objects.all()
+    serializer_class = StayBookingSourceMasterSerializer
+
+class MealCategoryMasterViewSet(MasterActionMixin, viewsets.ModelViewSet):
+    permission_classes = [IsCustomAuthenticated]
+    queryset = MealCategoryMaster.objects.all()
+    serializer_class = MealCategoryMasterSerializer
+
+class MealTypeMasterViewSet(MasterActionMixin, viewsets.ModelViewSet):
+    permission_classes = [IsCustomAuthenticated]
+    queryset = MealTypeMaster.objects.all()
+    serializer_class = MealTypeMasterSerializer
+
+class MealSourceMasterViewSet(MasterActionMixin, viewsets.ModelViewSet):
+    permission_classes = [IsCustomAuthenticated]
+    queryset = MealSourceMaster.objects.all()
+    serializer_class = MealSourceMasterSerializer
+
+class MealProviderMasterViewSet(MasterActionMixin, viewsets.ModelViewSet):
+    permission_classes = [IsCustomAuthenticated]
+    queryset = MealProviderMaster.objects.all()
+    serializer_class = MealProviderMasterSerializer
 
 class JobReportViewSet(viewsets.ModelViewSet):
     permission_classes = [IsCustomAuthenticated]
@@ -2691,47 +2774,7 @@ class JobReportViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         serializer.save(user=self.request.custom_user)
 
-class LocalTravelModeMasterViewSet(viewsets.ModelViewSet):
-    permission_classes = [IsCustomAuthenticated]
-    queryset = LocalTravelModeMaster.objects.all()
-    serializer_class = LocalTravelModeMasterSerializer
-
-class LocalCarSubTypeMasterViewSet(viewsets.ModelViewSet):
-    permission_classes = [IsCustomAuthenticated]
-    queryset = LocalCarSubTypeMaster.objects.all()
-    serializer_class = LocalCarSubTypeMasterSerializer
-
-class LocalBikeSubTypeMasterViewSet(viewsets.ModelViewSet):
-    permission_classes = [IsCustomAuthenticated]
-    queryset = LocalBikeSubTypeMaster.objects.all()
-    serializer_class = LocalBikeSubTypeMasterSerializer
-
-class LocalProviderMasterViewSet(viewsets.ModelViewSet):
-    permission_classes = [IsCustomAuthenticated]
-    queryset = LocalProviderMaster.objects.all()
-    serializer_class = LocalProviderMasterSerializer
-
-class StayTypeMasterViewSet(viewsets.ModelViewSet):
-    permission_classes = [IsCustomAuthenticated]
-    queryset = StayTypeMaster.objects.all()
-    serializer_class = StayTypeMasterSerializer
-
-class RoomTypeMasterViewSet(viewsets.ModelViewSet):
-    permission_classes = [IsCustomAuthenticated]
-    queryset = RoomTypeMaster.objects.all()
-    serializer_class = RoomTypeMasterSerializer
-
-class MealCategoryMasterViewSet(viewsets.ModelViewSet):
-    permission_classes = [IsCustomAuthenticated]
-    queryset = MealCategoryMaster.objects.all()
-    serializer_class = MealCategoryMasterSerializer
-
-class MealTypeMasterViewSet(viewsets.ModelViewSet):
-    permission_classes = [IsCustomAuthenticated]
-    queryset = MealTypeMaster.objects.all()
-    serializer_class = MealTypeMasterSerializer
-
-class IncidentalTypeMasterViewSet(viewsets.ModelViewSet):
+class IncidentalTypeMasterViewSet(MasterActionMixin, viewsets.ModelViewSet):
     permission_classes = [IsCustomAuthenticated]
     queryset = IncidentalTypeMaster.objects.all()
     serializer_class = IncidentalTypeMasterSerializer
@@ -2741,12 +2784,103 @@ class MasterModuleViewSet(viewsets.ModelViewSet):
     queryset = MasterModule.objects.all()
     serializer_class = MasterModuleSerializer
 
+    @action(detail=False, methods=['get'])
+    @permission_classes_decorator([AllowAny])
+    def seed_metadata(self, request):
+        # 0. Clean Sweep (Ensure fresh definitions)
+        CustomMasterDefinition.objects.all().delete()
+        MasterModule.objects.all().delete()
+
+        # 1. Modules
+        modules_data = [
+            {'name': 'Travel', 'display_order': 1},
+            {'name': 'Local Conveyance', 'display_order': 2},
+            {'name': 'Stay', 'display_order': 3},
+            {'name': 'Food', 'display_order': 4},
+            {'name': 'Incidental', 'display_order': 5},
+        ]
+        
+        modules = {}
+        for m_data in modules_data:
+            mod, _ = MasterModule.objects.update_or_create(
+                name=m_data['name'],
+                defaults={'display_order': m_data['display_order']}
+            )
+            modules[m_data['name']] = mod
+
+        # 2. Definitions
+        definitions_data = [
+            {'module': 'Travel', 'table_name': 'Travel Modes', 'endpoint': 'travel-mode-masters', 'fields': 'mode_name,status'},
+            {'module': 'Travel', 'table_name': 'Booking Types', 'endpoint': 'booking-type-masters', 'fields': 'booking_type,status'},
+            {'module': 'Travel', 'table_name': 'Operators (Flight/Train/Bus)', 'endpoint': 'operator-masters', 'fields': 'operator_name,is_flight,is_train,is_bus,status'},
+            {'module': 'Travel', 'table_name': 'Travel Classes', 'endpoint': 'travel-class-masters', 'fields': 'class_name,is_flight,is_train,is_bus,status'},
+            {'module': 'Travel', 'table_name': 'Vehicles', 'endpoint': 'vehicle-masters', 'fields': 'vehicle_name,is_bus,is_intercity_cab,status'},
+            {'module': 'Travel', 'table_name': 'Providers', 'endpoint': 'provider-masters', 'fields': 'provider_name,is_flight,is_train,is_bus,is_intercity_cab,status'},
+            {'module': 'Travel', 'table_name': 'Ticket Statuses', 'endpoint': 'ticket-status-masters', 'fields': 'status_name,is_flight,is_train,is_bus,is_intercity_cab,status'},
+            {'module': 'Travel', 'table_name': 'Quota Types', 'endpoint': 'quota-type-masters', 'fields': 'quota_name,status'},
+            
+            {'module': 'Local Conveyance', 'table_name': 'Local Modes', 'endpoint': 'local-travel-mode-masters', 'fields': 'mode_name,status'},
+            {'module': 'Local Conveyance', 'table_name': 'Local Providers', 'endpoint': 'local-provider-masters', 'fields': 'provider_name,is_car,is_bike,is_auto,is_bus,is_metro,status'},
+            {'module': 'Local Conveyance', 'table_name': 'Local Sub-Types', 'endpoint': 'local-sub-type-masters', 'fields': 'sub_type,is_car,is_bike,is_auto,status'},
+            
+            {'module': 'Stay', 'table_name': 'Stay Types', 'endpoint': 'stay-type-masters', 'fields': 'stay_type,status'},
+            {'module': 'Stay', 'table_name': 'Room Types', 'endpoint': 'room-type-masters', 'fields': 'room_type,status'},
+            {'module': 'Stay', 'table_name': 'Stay Booking Types', 'endpoint': 'stay-booking-type-masters', 'fields': 'booking_type,status'},
+            {'module': 'Stay', 'table_name': 'Stay Booking Sources', 'endpoint': 'stay-booking-source-masters', 'fields': 'source_name,status'},
+            
+            {'module': 'Food', 'table_name': 'Meal Categories', 'endpoint': 'meal-category-masters', 'fields': 'category_name,status'},
+            {'module': 'Food', 'table_name': 'Meal Types', 'endpoint': 'meal-type-masters', 'fields': 'meal_type,status'},
+            {'module': 'Food', 'table_name': 'Meal Sources', 'endpoint': 'meal-source-masters', 'fields': 'source_name,status'},
+            {'module': 'Food', 'table_name': 'Meal Providers', 'endpoint': 'meal-provider-masters', 'fields': 'provider_name,status'},
+            
+            {'module': 'Incidental', 'table_name': 'Incidental Types', 'endpoint': 'incidental-type-masters', 'fields': 'expense_type,category,status'},
+        ]
+        
+        for d_data in definitions_data:
+            CustomMasterDefinition.objects.update_or_create(
+                table_name=d_data['table_name'],
+                defaults={
+                    'module_ref': modules[d_data['module']],
+                    'api_endpoint': d_data['endpoint'],
+                    'fields_list': d_data['fields'],
+                    'is_system': True
+                }
+            )
+
+        # 3. Seed Initial Records for popular masters
+        # Stay Booking Types
+        for btype in ['Self Booking', 'Company Booking', 'Online Booking']:
+            StayBookingTypeMaster.objects.get_or_create(booking_type=btype, defaults={'status': True})
+        
+        # Room Types
+        for rtype in ['Standard', 'Deluxe', 'Executive', 'Suite']:
+            RoomTypeMaster.objects.get_or_create(room_type=rtype, defaults={'status': True})
+
+        # Stay Types
+        for stype in ['Hotel Stay', 'Guest House', 'Self Stay']:
+            StayTypeMaster.objects.get_or_create(stay_type=stype, defaults={'status': True})
+
+        # Local Modes
+        for lmode in ['Car', 'Bike', 'Auto', 'Public Transport']:
+            LocalTravelModeMaster.objects.get_or_create(mode_name=lmode, defaults={'status': True})
+
+        # Meal Categories
+        for mcat in ['Self Meal', 'Business Lunch', 'Dinner with Client']:
+            MealCategoryMaster.objects.get_or_create(category_name=mcat, defaults={'status': True})
+
+        return Response({
+            "status": "Master Metadata and Initial Records Seeded Successfully", 
+            "modules": len(modules_data), 
+            "definitions": len(definitions_data),
+            "records_note": "Added initial values for Stay Booking Types, Room Types, Stay Types, Local Modes, and Meal Categories."
+        })
+
 class CustomMasterDefinitionViewSet(viewsets.ModelViewSet):
     permission_classes = [IsCustomAuthenticated]
     queryset = CustomMasterDefinition.objects.all()
     serializer_class = CustomMasterDefinitionSerializer
 
-class CustomMasterValueViewSet(viewsets.ModelViewSet):
+class CustomMasterValueViewSet(MasterActionMixin, viewsets.ModelViewSet):
     permission_classes = [IsCustomAuthenticated]
     queryset = CustomMasterValue.objects.all()
     serializer_class = CustomMasterValueSerializer
